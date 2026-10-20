@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type { Productivity } from "../application/productivity";
-import { habitStreak, type HabitRecord } from "../domain/productivity";
+import {
+  habitBestStreak,
+  habitState,
+  habitStreak,
+  type HabitRecord,
+} from "../domain/productivity";
 
 export function HabitsScreen(props: {
   habits: HabitRecord[];
@@ -89,9 +94,15 @@ function HabitRow(props: {
     <li className="task-card card-glass">
       <strong>{props.habit.title}</strong>
       <span className="muted">
-        {props.habit.frequency} · {habitStreak(props.habit, props.today)}{" "}
-        {props.locale === "fa" ? "روز" : "day streak"}
+        {props.habit.frequency} · {habitState(props.habit, props.today)} ·{" "}
+        {habitStreak(props.habit, props.today)} / {habitBestStreak(props.habit)}{" "}
+        {props.locale === "fa" ? "روز" : "streak"}
       </span>
+      <small className="muted">
+        {props.habit.checkIns.length
+          ? props.habit.checkIns.slice(-7).reverse().join(" · ")
+          : "No check-ins yet"}
+      </small>
       {edit ? (
         <div className="cluster">
           <input
