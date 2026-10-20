@@ -39,6 +39,7 @@ export const workspace = createWorkspace(
       const databaseChanges = liveQuery(async () =>
         Promise.all([
           db.events.toArray(),
+          db.habits.toArray(),
           db.timerSessions.toArray(),
           db.notificationOccurrences.toArray(),
           db.quietHours.toArray(),
@@ -55,7 +56,12 @@ export const workspace = createWorkspace(
   publish,
 );
 
-export const productivity = createProductivity(productivityDb, publish);
+let calendarApi!: ReturnType<typeof createCalendar>;
+export const productivity = createProductivity(
+  productivityDb,
+  publish,
+  (id, expected, patch) => calendarApi.updateHabit(id, expected, patch),
+);
 export const plugins = createPluginPlatform(
   db,
   {
@@ -68,7 +74,7 @@ export const plugins = createPluginPlatform(
   (profileId, record, w, h) =>
     workspace.addPluginWidget(profileId, record, w, h),
 );
-export const calendar = createCalendar({
+export const calendar = (calendarApi = createCalendar({
   database: calendarDb,
   alarms: sweepAlarmPort,
   notifications: productNotifications,
@@ -81,7 +87,7 @@ export const calendar = createCalendar({
       status: "done",
     });
   },
-});
+}));
 
 export async function requestOptional(
   name: "bookmarks" | "notifications",

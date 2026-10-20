@@ -21,7 +21,7 @@ describe("Dexie version 3 migration", () => {
   it("opens version 3 without deleting version 1 probes", async () => {
     const { db } = await import("../../src/infrastructure/db");
     await db.open();
-    expect(db.verno).toBe(7);
+    expect(db.verno).toBe(8);
     expect(await db.probes.get(probe.id)).toMatchObject({
       state: "pending",
       dueAt: 5,
@@ -151,7 +151,7 @@ describe("Dexie version 3 migration", () => {
     });
     version4.close();
     await db.open();
-    expect(db.verno).toBe(7);
+    expect(db.verno).toBe(8);
     expect(await db.probes.get(probe.id)).toMatchObject({ state: "pending" });
     expect(
       await db.notes.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
@@ -282,7 +282,7 @@ it("preserves a realistic version 6 workspace and persists habit check-ins after
   });
   legacy.close();
   await db.open();
-  expect(db.verno).toBe(7);
+  expect(db.verno).toBe(8);
   expect(db.tables.some((table) => table.name === "habits")).toBe(true);
   expect((await db.profiles.get(profileId))?.id).toBe(profileId);
   expect((await db.widgets.toArray())[0]?.profileId).toBe(profileId);
@@ -304,5 +304,71 @@ it("preserves a realistic version 6 workspace and persists habit check-ins after
     id: habitId,
     checkIns: ["2026-10-20"],
   });
+  db.close();
+});
+
+it("adds the habit reminder index from v7 while preserving event and task reminder history", async () => {
+  const { db } = await import("../../src/infrastructure/db");
+  if (db.isOpen()) db.close();
+  await Dexie.delete("Venus-p00");
+  const v7Stores = Object.fromEntries(
+    db.tables.map((table) => {
+      const indexes = table.schema.indexes.map((index) => index.src);
+      const fields = [table.schema.primKey.src, ...indexes].filter(Boolean);
+      return [table.name, fields.join(", ")];
+    }),
+  );
+  v7Stores.reminderRules = "id, eventId, taskId";
+  const legacy = new Dexie("Venus-p00");
+  legacy.version(7).stores(v7Stores);
+  const eventRule = "11111111-1111-4111-8111-111111111111";
+  const taskRule = "22222222-2222-4222-8222-222222222222";
+  await legacy.table("reminderRules").bulkPut([
+    {
+      id: eventRule,
+      eventId: "33333333-3333-4333-8333-333333333333",
+      taskId: null,
+      offsetMinutes: 5,
+    },
+    {
+      id: taskRule,
+      eventId: null,
+      taskId: "44444444-4444-4444-8444-444444444444",
+      offsetMinutes: 10,
+    },
+  ]);
+  const oldNotification = {
+    idempotencyKey: "legacy-event-occurrence",
+    ownerId: "33333333-3333-4333-8333-333333333333",
+    ruleId: eventRule,
+    occurrenceKey: "legacy-date",
+    fireAtUTC: 1_800_000_000_000,
+    internalStatus: "pending",
+    read: false,
+    seenMissed: false,
+    nativeAttempt: "not_started",
+    nativeApiStatus: null,
+    osDisplay: "unobserved",
+    attempt: 1,
+    quietHoursOverride: false,
+    sourceKind: "event",
+    title: "Legacy event",
+  };
+  await legacy.table("notificationOccurrences").put(oldNotification);
+  legacy.close();
+  await db.open();
+  expect(db.verno).toBe(8);
+  expect(await db.reminderRules.get(eventRule)).toMatchObject({
+    eventId: "33333333-3333-4333-8333-333333333333",
+    taskId: null,
+  });
+  expect(await db.reminderRules.get(taskRule)).toMatchObject({
+    eventId: null,
+    taskId: "44444444-4444-4444-8444-444444444444",
+  });
+  expect(
+    await db.notificationOccurrences.get(oldNotification.idempotencyKey),
+  ).toMatchObject(oldNotification);
+  expect(db.reminderRules.schema.idxByName.habitId).toBeDefined();
   db.close();
 });

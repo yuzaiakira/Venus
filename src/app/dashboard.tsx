@@ -88,6 +88,7 @@ export function DashboardScreen(props: {
   }, []);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [focusedHabitId, setFocusedHabitId] = useState<string | null>(null);
   const [taskDialogId, setTaskDialogId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const loadSequence = useRef(0);
@@ -751,6 +752,11 @@ export function DashboardScreen(props: {
                 quiet={quiet}
                 timer={activeTimer}
                 calendar={props.calendar}
+                onOpenHabit={(id) => {
+                  setFocusedHabitId(id);
+                  setBell(false);
+                  setView("habits");
+                }}
                 onChanged={reload}
               />
             ) : null}
@@ -785,7 +791,18 @@ export function DashboardScreen(props: {
               <HabitsScreen
                 habits={library.habits}
                 productivity={props.productivity}
+                calendar={props.calendar}
                 locale={snapshot.bootstrap.locale}
+                timeZone={snapshot.bootstrap.timeZone}
+                online={online}
+                onChanged={reload}
+                requestNotificationPermission={async () => {
+                  const { requestOptional } = await import(
+                    "../infrastructure/browser-workspace"
+                  );
+                  return requestOptional("notifications");
+                }}
+                focusHabitId={focusedHabitId}
               />
             ) : null}
             {view === "home" ? (

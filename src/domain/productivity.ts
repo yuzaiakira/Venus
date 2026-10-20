@@ -184,6 +184,39 @@ export const habitSchema = z
     ...stampSchema,
     title: z.string().min(1).max(120),
     frequency: z.enum(["daily", "weekly"]),
+    reminder: z
+      .object({
+        enabled: z.boolean(),
+        time: z.string().regex(/^\d{2}:\d{2}$/),
+        timeZone: z.string().min(1),
+        weekdays: z.array(z.number().int().min(1).max(7)).max(7),
+      })
+      .nullable()
+      .optional()
+      .superRefine((reminder, context) => {
+        if (!reminder) return;
+        const [hour, minute] = reminder.time.split(":").map(Number);
+        if (hour! > 23 || minute! > 59)
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Invalid reminder time",
+          });
+        if (new Set(reminder.weekdays).size !== reminder.weekdays.length)
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Reminder weekdays must be unique",
+          });
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: reminder.timeZone }).format(
+            0,
+          );
+        } catch {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Invalid reminder timezone",
+          });
+        }
+      }),
     checkIns: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(730),
   })
   .strict();

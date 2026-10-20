@@ -92,7 +92,10 @@ export const reminderRuleSchema = z
   .superRefine((value, context) => {
     const owners = [value.eventId, value.taskId, value.habitId].filter(Boolean);
     if (owners.length !== 1)
-      context.addIssue({ code: z.ZodIssueCode.custom, message: "exactly one reminder owner is required" });
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "exactly one reminder owner is required",
+      });
   });
 export const notificationSchema = z
   .object({

@@ -1,7 +1,9 @@
 import { WorkspaceError } from "../domain/dashboard";
 import {
+  addDays,
   assertProductDate,
   convertDate,
+  isoWeekday,
   occurrenceKey,
   resolveWallTime,
   todayInZone,
@@ -37,12 +39,17 @@ import {
   snoozeRow,
 } from "../domain/time/schedule";
 import { VenusTemporal } from "../domain/time/temporal";
-import type { HabitRecord } from "../domain/productivity";
+import { habitSchema, type HabitRecord } from "../domain/productivity";
 
 const sweepAlarm = "venus-sweep";
 
 export interface CalendarDatabase {
-  habits: { get(id: string): Promise<HabitRecord | undefined>; toArray(): Promise<HabitRecord[]> };
+  habits: {
+    get(id: string): Promise<HabitRecord | undefined>;
+    toArray(): Promise<HabitRecord[]>;
+    put(row: HabitRecord): Promise<unknown>;
+    delete(id: string): Promise<void>;
+  };
   events: {
     get(id: string): Promise<EventRecord | undefined>;
     toArray(): Promise<EventRecord[]>;
@@ -106,6 +113,10 @@ export function createCalendar(input: {
     createEvent,
     saveEvent,
     replaceRules,
+    configureHabitReminder,
+    updateHabit,
+    deleteHabit,
+    notificationPermission: () => input.notifications.permission(),
     deleteEvent,
     saveQuietHours,
     quietHours,
@@ -321,6 +332,180 @@ export function createCalendar(input: {
     await armSweep();
     return result;
   }
+  async function configureHabitReminder(
+    id: string,
+    expected: number,
+    reminder: NonNullable<HabitRecord["reminder"]>,
+  ) {
+    return updateHabit(id, expected, { reminder });
+  }
+  async function updateHabit(
+    id: string,
+    expected: number,
+    patch: Partial<Pick<HabitRecord, "title" | "frequency" | "reminder">>,
+  ) {
+    const result = await input.database.transaction(async () => {
+      const current = await input.database.habits.get(id);
+      if (!current) throw new WorkspaceError("notFound");
+      if (current.revision !== expected) throw new WorkspaceError("conflict");
+      const reminder =
+        patch.reminder === undefined
+          ? current.reminder
+          : habitSchema.shape.reminder.parse(patch.reminder);
+      if (reminder?.enabled) {
+        new Intl.DateTimeFormat("en", { timeZone: reminder.timeZone }).format(
+          now(),
+        );
+        for (const day of reminder.weekdays)
+          if (!Number.isInteger(day) || day < 1 || day > 7)
+            throw new WorkspaceError("invalidInput");
+      }
+      if (patch.reminder !== undefined) {
+        await cancelHabitFuture(id);
+        for (const rule of await input.database.reminderRules.toArray())
+          if (rule.habitId === id)
+            await input.database.reminderRules.delete(rule.id);
+      }
+      const next = habitSchema.parse({
+        ...current,
+        title: patch.title === undefined ? current.title : patch.title.trim(),
+        frequency: patch.frequency ?? current.frequency,
+        reminder,
+        revision: current.revision + 1,
+        updatedAt: new Date(now()).toISOString(),
+      });
+      await input.database.habits.put(next);
+      if (patch.reminder !== undefined && reminder?.enabled)
+        await input.database.reminderRules.put(
+          reminderRuleSchema.parse({
+            id: crypto.randomUUID(),
+            eventId: null,
+            taskId: null,
+            habitId: id,
+            offsetMinutes: null,
+            absoluteTime: null,
+            severity: "normal",
+            quietHoursOverride: false,
+          }),
+        );
+      if (next.title !== current.title) {
+        for (const row of await input.database.notificationOccurrences.toArray())
+          if (
+            row.ownerId === id &&
+            row.sourceKind === "habit" &&
+            row.internalStatus === "pending"
+          )
+            await input.database.notificationOccurrences.put({
+              ...row,
+              title: next.title,
+            });
+      }
+      await materializeHabit(next);
+      return next;
+    });
+    await armSweep();
+    return result;
+  }
+  async function deleteHabit(id: string, expected: number) {
+    await input.database.transaction(async () => {
+      const current = await input.database.habits.get(id);
+      if (!current) throw new WorkspaceError("notFound");
+      if (current.revision !== expected) throw new WorkspaceError("conflict");
+      await cancelHabitFuture(id);
+      for (const rule of await input.database.reminderRules.toArray())
+        if (rule.habitId === id)
+          await input.database.reminderRules.delete(rule.id);
+      await input.database.habits.delete(id);
+    });
+    await armSweep();
+  }
+  async function cancelHabitFuture(id: string) {
+    for (const row of await input.database.notificationOccurrences.toArray())
+      if (
+        row.ownerId === id &&
+        row.sourceKind === "habit" &&
+        ["pending", "due"].includes(row.internalStatus)
+      )
+        await input.database.notificationOccurrences.put({
+          ...row,
+          internalStatus: "cancelled",
+        });
+  }
+  async function materializeHabit(habit: HabitRecord) {
+    const rules = (await input.database.reminderRules.toArray())
+      .filter((rule) => rule.habitId === habit.id)
+      .sort((left, right) => left.id.localeCompare(right.id));
+    const reminder = habit.reminder;
+    if (!reminder?.enabled || !rules.length) {
+      await cancelHabitFuture(habit.id);
+      return;
+    }
+    const today = todayInZone(reminder.timeZone, now(), "gregorian");
+    const [hour, minute] = reminder.time.split(":").map(Number);
+    const desired = new Set<string>();
+    const desiredOccurrences = new Set<string>();
+    for (let offset = 0; offset <= materializationHorizonDays; offset += 1) {
+      const date = addDays(today, offset);
+      if (
+        habit.frequency === "weekly" &&
+        !reminder.weekdays.includes(isoWeekday(date))
+      )
+        continue;
+      const localDate = `${date.year.toString().padStart(4, "0")}-${date.month.toString().padStart(2, "0")}-${date.day.toString().padStart(2, "0")}`;
+      if (habit.checkIns.includes(localDate)) continue;
+      const resolved = resolveWallTime({
+        date,
+        wall: { hour: hour!, minute: minute!, second: 0 },
+        timeZone: reminder.timeZone,
+        foldPolicy: "earlier",
+      });
+      const fireAt = resolved.instant.epochMs;
+      const occurrence = `habit:${habit.id}:${localDate}`;
+      for (const rule of rules.slice(0, 1)) {
+        desiredOccurrences.add(`${rule.id}:${occurrence}`);
+        const key = idempotencyKey({
+          ownerId: habit.id,
+          ruleId: rule.id,
+          occurrenceKey: occurrence,
+          scheduledInstant: fireAt,
+          attempt: 1,
+        });
+        desired.add(key);
+        if (await input.database.notificationOccurrences.get(key)) continue;
+        await input.database.notificationOccurrences.put(
+          notificationSchema.parse({
+            idempotencyKey: key,
+            ownerId: habit.id,
+            ruleId: rule.id,
+            occurrenceKey: occurrence,
+            fireAtUTC: fireAt,
+            internalStatus: "pending",
+            read: false,
+            seenMissed: false,
+            nativeAttempt: "not_started",
+            nativeApiStatus: null,
+            osDisplay: "unobserved",
+            attempt: 1,
+            quietHoursOverride: rule.quietHoursOverride,
+            sourceKind: "habit",
+            title: habit.title,
+          }),
+        );
+      }
+    }
+    for (const row of await input.database.notificationOccurrences.toArray())
+      if (
+        row.ownerId === habit.id &&
+        row.sourceKind === "habit" &&
+        ["pending", "due"].includes(row.internalStatus) &&
+        !desired.has(row.idempotencyKey) &&
+        !desiredOccurrences.has(`${row.ruleId}:${row.occurrenceKey}`)
+      )
+        await input.database.notificationOccurrences.put({
+          ...row,
+          internalStatus: "cancelled",
+        });
+  }
   async function cancelFuture(ownerId: string) {
     const rows = await input.database.notificationOccurrences.toArray();
     for (const row of rows) {
@@ -451,6 +636,8 @@ export function createCalendar(input: {
   async function snooze(key: string, minutes: number) {
     const result = await input.database.transaction(async () => {
       const row = await must(key);
+      if (!["pending", "due", "missed"].includes(row.internalStatus))
+        throw new WorkspaceError("conflict");
       const next = snoozeRow(row, now() + minutes * 60_000);
       await input.database.notificationOccurrences.put({
         ...row,
@@ -464,11 +651,15 @@ export function createCalendar(input: {
     return result;
   }
   async function dismiss(key: string) {
-    const row = await must(key);
-    await input.database.notificationOccurrences.put({
-      ...row,
-      internalStatus: "dismissed",
-      read: true,
+    await input.database.transaction(async () => {
+      const row = await must(key);
+      if (!["pending", "due", "missed"].includes(row.internalStatus))
+        throw new WorkspaceError("conflict");
+      await input.database.notificationOccurrences.put({
+        ...row,
+        internalStatus: "dismissed",
+        read: true,
+      });
     });
   }
   async function markRead(key: string) {
@@ -488,6 +679,45 @@ export function createCalendar(input: {
     if (row.sourceKind === "task") {
       if (!input.completeTask) throw new WorkspaceError("invalidInput");
       await input.completeTask(row.ownerId, taskRevision);
+    }
+    if (row.sourceKind === "habit") {
+      await input.database.transaction(async () => {
+        const fresh = await input.database.notificationOccurrences.get(key);
+        if (!fresh) throw new WorkspaceError("notFound");
+        if (fresh.internalStatus === "completed") return;
+        if (fresh.internalStatus === "cancelled")
+          throw new WorkspaceError("conflict");
+        const habit = await input.database.habits.get(fresh.ownerId);
+        if (!habit) throw new WorkspaceError("notFound");
+        const prefix = `habit:${habit.id}:`;
+        const date = fresh.occurrenceKey.slice(prefix.length);
+        const parsedDate = new Date(`${date}T00:00:00.000Z`);
+        if (
+          !fresh.occurrenceKey.startsWith(prefix) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+          !Number.isFinite(parsedDate.getTime()) ||
+          parsedDate.toISOString().slice(0, 10) !== date
+        )
+          throw new WorkspaceError("invalidInput");
+        const checkIns = habit.checkIns.includes(date)
+          ? habit.checkIns
+          : [...habit.checkIns, date].sort();
+        if (checkIns !== habit.checkIns)
+          await input.database.habits.put({
+            ...habit,
+            checkIns,
+            revision: habit.revision + 1,
+            updatedAt: new Date(now()).toISOString(),
+          });
+        await input.database.notificationOccurrences.put({
+          ...fresh,
+          internalStatus: "completed",
+          read: true,
+        });
+      });
+      await materializeHabit((await input.database.habits.get(row.ownerId))!);
+      await armSweep();
+      return;
     }
     await input.database.notificationOccurrences.put({
       ...row,
@@ -567,6 +797,64 @@ export function createCalendar(input: {
         if (fresh?.recurrenceSpec) await materialize(fresh);
       });
     }
+    await input.database.transaction(async () => {
+      const habits = await input.database.habits.toArray();
+      const activeHabitIds = new Set(
+        habits
+          .filter((habit) => habit.reminder?.enabled)
+          .map((habit) => habit.id),
+      );
+      for (const rule of await input.database.reminderRules.toArray())
+        if (rule.habitId && !activeHabitIds.has(rule.habitId))
+          await input.database.reminderRules.delete(rule.id);
+      for (const row of await input.database.notificationOccurrences.toArray())
+        if (
+          row.sourceKind === "habit" &&
+          (!habits.some((habit) => habit.id === row.ownerId) ||
+            !activeHabitIds.has(row.ownerId)) &&
+          ["pending", "due"].includes(row.internalStatus)
+        )
+          await input.database.notificationOccurrences.put({
+            ...row,
+            internalStatus: "cancelled",
+          });
+      for (const habit of habits) {
+        const current = await input.database.habits.get(habit.id);
+        if (!current) continue;
+        let rules = (await input.database.reminderRules.toArray()).filter(
+          (rule) => rule.habitId === habit.id,
+        );
+        if (current.reminder?.enabled && rules.length === 0) {
+          const rule = reminderRuleSchema.parse({
+            id: crypto.randomUUID(),
+            eventId: null,
+            taskId: null,
+            habitId: habit.id,
+            offsetMinutes: null,
+            absoluteTime: null,
+            severity: "normal",
+            quietHoursOverride: false,
+          });
+          await input.database.reminderRules.put(rule);
+          rules = [rule];
+        }
+        rules.sort((left, right) => left.id.localeCompare(right.id));
+        for (const extra of rules.slice(1)) {
+          await input.database.reminderRules.delete(extra.id);
+          for (const row of await input.database.notificationOccurrences.toArray())
+            if (
+              row.ruleId === extra.id &&
+              row.sourceKind === "habit" &&
+              ["pending", "due"].includes(row.internalStatus)
+            )
+              await input.database.notificationOccurrences.put({
+                ...row,
+                internalStatus: "cancelled",
+              });
+        }
+        await materializeHabit(current);
+      }
+    });
     const quiet = await quietHours();
     const permission = await input.notifications.permission();
     const rows = await input.database.notificationOccurrences.toArray();

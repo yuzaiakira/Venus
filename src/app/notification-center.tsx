@@ -16,6 +16,7 @@ export function NotificationCenter(props: {
   timer: TimerRecord | null;
   calendar: CalendarApi;
   onChanged: () => Promise<void>;
+  onOpenHabit: (habitId: string) => void;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
   const [error, setError] = useState("");
@@ -44,6 +45,7 @@ export function NotificationCenter(props: {
         locale={props.locale}
         calendar={props.calendar}
         onChanged={props.onChanged}
+        onOpenHabit={props.onOpenHabit}
       />
       <h3>{t("notify.open")}</h3>
       <NotificationList
@@ -51,6 +53,7 @@ export function NotificationCenter(props: {
         locale={props.locale}
         calendar={props.calendar}
         onChanged={props.onChanged}
+        onOpenHabit={props.onOpenHabit}
       />
       <h3>{t("notify.history")}</h3>
       <NotificationList
@@ -58,6 +61,7 @@ export function NotificationCenter(props: {
         locale={props.locale}
         calendar={props.calendar}
         onChanged={props.onChanged}
+        onOpenHabit={props.onOpenHabit}
       />
       <form
         onSubmit={(event) => {
@@ -113,6 +117,7 @@ function NotificationList(props: {
   locale: "en" | "fa";
   calendar: CalendarApi;
   onChanged: () => Promise<void>;
+  onOpenHabit: (habitId: string) => void;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
   const [error, setError] = useState("");
@@ -126,6 +131,15 @@ function NotificationList(props: {
       ) : null}
       {props.rows.map((row) => (
         <li key={row.idempotencyKey}>
+          {row.sourceKind === "habit" ? (
+            <button
+              className="btn"
+              type="button"
+              onClick={() => props.onOpenHabit(row.ownerId)}
+            >
+              {t("habits.openFromReminder")}
+            </button>
+          ) : null}
           <button
             className="btn"
             type="button"
@@ -144,42 +158,46 @@ function NotificationList(props: {
             {row.nativeApiStatus ? ` · ${row.nativeApiStatus}` : ""}
             {` · ${t("notify.osUnobserved")}`}
           </span>
-          <button
-            className="btn"
-            type="button"
-            onClick={() =>
-              void props.calendar
-                .snooze(row.idempotencyKey, 10)
-                .then(props.onChanged)
-                .catch(() => setError(t("settings.error")))
-            }
-          >
-            {t("notify.snooze")}
-          </button>
-          <button
-            className="btn"
-            type="button"
-            onClick={() =>
-              void props.calendar
-                .complete(row.idempotencyKey)
-                .then(props.onChanged)
-                .catch(() => setError(t("settings.error")))
-            }
-          >
-            {t("notify.done")}
-          </button>
-          <button
-            className="btn"
-            type="button"
-            onClick={() =>
-              void props.calendar
-                .dismiss(row.idempotencyKey)
-                .then(props.onChanged)
-                .catch(() => setError(t("settings.error")))
-            }
-          >
-            {t("notify.dismiss")}
-          </button>
+          {["pending", "due", "missed"].includes(row.internalStatus) ? (
+            <>
+              <button
+                className="btn"
+                type="button"
+                onClick={() =>
+                  void props.calendar
+                    .snooze(row.idempotencyKey, 10)
+                    .then(props.onChanged)
+                    .catch(() => setError(t("settings.error")))
+                }
+              >
+                {t("notify.snooze")}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={() =>
+                  void props.calendar
+                    .complete(row.idempotencyKey)
+                    .then(props.onChanged)
+                    .catch(() => setError(t("settings.error")))
+                }
+              >
+                {t("notify.done")}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={() =>
+                  void props.calendar
+                    .dismiss(row.idempotencyKey)
+                    .then(props.onChanged)
+                    .catch(() => setError(t("settings.error")))
+                }
+              >
+                {t("notify.dismiss")}
+              </button>
+            </>
+          ) : null}
         </li>
       ))}
     </ul>

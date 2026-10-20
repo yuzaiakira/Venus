@@ -16,6 +16,7 @@ beforeEach(async () => {
     db.notes.clear(),
     db.noteDrafts.clear(),
     db.tasks.clear(),
+    db.habits.clear(),
     db.folders.clear(),
     db.localBookmarks.clear(),
     db.events.clear(),
@@ -267,6 +268,226 @@ function calendarService() {
     now: () => Date.UTC(2026, 5, 1, 12),
   });
 }
+
+it("runs a persistent daily habit reminder through completion and disable", async () => {
+  let clock = Date.UTC(2026, 5, 1, 12);
+  const displays: string[] = [];
+  const alarms: number[] = [];
+  const api = createCalendar({
+    database: calendarDb,
+    alarms: {
+      schedule: async (at) => {
+        alarms.push(at);
+      },
+      clear: async () => {},
+    },
+    notifications: {
+      permission: async () => "granted",
+      show: async (id) => {
+        displays.push(id);
+        return "accepted";
+      },
+      clear: async () => {},
+    },
+    now: () => clock,
+  });
+  const habits = createProductivity(
+    productivityDb,
+    undefined,
+    (id, expected, patch) => api.updateHabit(id, expected, patch),
+  );
+  const habit = await habits.createHabit("Read", "daily");
+  const saved = await habits.updateHabit(habit.id, habit.revision, {
+    reminder: {
+      enabled: true,
+      time: "13:00",
+      timeZone: "UTC",
+      weekdays: [],
+    },
+  });
+  const first = (await api.list()).notifications.find(
+    (row) => row.occurrenceKey === `habit:${habit.id}:2026-06-01`,
+  )!;
+  expect(saved.reminder).toMatchObject({ enabled: true, time: "13:00" });
+  expect(first).toMatchObject({
+    internalStatus: "pending",
+    sourceKind: "habit",
+  });
+  expect(alarms).toContain(Date.UTC(2026, 5, 1, 13));
+  await api.reconcile(false);
+  expect(
+    (await api.list()).notifications.filter(
+      (row) => row.idempotencyKey === first.idempotencyKey,
+    ),
+  ).toHaveLength(1);
+
+  clock += 60 * 60_000;
+  await api.reconcile(false);
+  expect(displays).toContain(first.idempotencyKey);
+  await api.snooze(first.idempotencyKey, 10);
+  const snoozed = (await api.list()).notifications.find(
+    (row) => row.occurrenceKey === first.occurrenceKey && row.attempt === 2,
+  )!;
+  clock += 10 * 60_000;
+  await api.reconcile(false);
+  await Promise.all([
+    api.complete(snoozed.idempotencyKey),
+    api.complete(snoozed.idempotencyKey),
+  ]);
+  await api.complete(snoozed.idempotencyKey);
+  expect((await db.habits.get(habit.id))?.checkIns).toEqual(["2026-06-01"]);
+  expect(
+    (await db.notificationOccurrences.get(first.idempotencyKey))
+      ?.internalStatus,
+  ).toBe("snoozed");
+  expect(
+    (await db.notificationOccurrences.get(snoozed.idempotencyKey))
+      ?.internalStatus,
+  ).toBe("completed");
+  expect((await api.list()).notifications).toContainEqual(
+    expect.objectContaining({
+      occurrenceKey: `habit:${habit.id}:2026-06-02`,
+      internalStatus: "pending",
+    }),
+  );
+
+  const current = (await db.habits.get(habit.id))!;
+  await habits.updateHabit(habit.id, current.revision, {
+    reminder: {
+      enabled: false,
+      time: "13:00",
+      timeZone: "UTC",
+      weekdays: [],
+    },
+  });
+  expect(
+    (await api.list()).notifications.filter(
+      (row) => row.sourceKind === "habit" && row.internalStatus === "pending",
+    ),
+  ).toHaveLength(0);
+  db.close();
+  await db.open();
+  expect((await db.habits.get(habit.id))?.checkIns).toEqual(["2026-06-01"]);
+  expect(
+    (await db.notificationOccurrences.get(first.idempotencyKey))
+      ?.internalStatus,
+  ).toBe("snoozed");
+});
+
+it("materializes selected weekly weekdays in the habit timezone across a DST transition", async () => {
+  let clock = Date.UTC(2026, 2, 7, 6);
+  const api = createCalendar({
+    database: calendarDb,
+    alarms: { schedule: async () => {}, clear: async () => {} },
+    notifications: {
+      permission: async () => "missing",
+      show: async () => "rejected",
+      clear: async () => {},
+    },
+    now: () => clock,
+  });
+  const habit = await createProductivity(productivityDb).createHabit(
+    "Walk",
+    "weekly",
+  );
+  const saved = await api.configureHabitReminder(habit.id, habit.revision, {
+    enabled: true,
+    time: "02:30",
+    timeZone: "America/Los_Angeles",
+    weekdays: [7],
+  });
+  const rows = (await api.list()).notifications.filter(
+    (row) => row.sourceKind === "habit",
+  );
+  expect(rows.length).toBeGreaterThan(0);
+  expect(rows.every((row) => new Date(row.fireAtUTC).getUTCDay() === 0)).toBe(
+    true,
+  );
+  const expectedSunday = rows.find((row) =>
+    row.occurrenceKey.endsWith("2026-03-08"),
+  );
+  expect(expectedSunday).toBeDefined();
+  await api.reconcile(false);
+  await api.reconcile(false);
+  expect(
+    (await api.list()).notifications.filter(
+      (row) =>
+        row.sourceKind === "habit" && row.occurrenceKey.endsWith("2026-03-08"),
+    ),
+  ).toHaveLength(1);
+  expect((await db.habits.get(habit.id))?.revision).toBe(saved.revision);
+  await api.dismiss(expectedSunday!.idempotencyKey);
+  await api.reconcile(false);
+  expect(
+    (await db.notificationOccurrences.get(expectedSunday!.idempotencyKey))
+      ?.internalStatus,
+  ).toBe("dismissed");
+  clock += 1;
+});
+
+it("replaces edited reminder occurrences and cleans a deleted habit without dropping history", async () => {
+  let clock = Date.UTC(2026, 5, 1, 12);
+  const api = createCalendar({
+    database: calendarDb,
+    alarms: { schedule: async () => {}, clear: async () => {} },
+    notifications: {
+      permission: async () => "missing",
+      show: async () => "rejected",
+      clear: async () => {},
+    },
+    now: () => clock,
+  });
+  const habit = await createProductivity(productivityDb).createHabit(
+    "Stretch",
+    "daily",
+  );
+  const first = await api.configureHabitReminder(habit.id, habit.revision, {
+    enabled: true,
+    time: "14:00",
+    timeZone: "UTC",
+    weekdays: [],
+  });
+  const oldOccurrence = (await api.list()).notifications.find(
+    (row) => row.occurrenceKey === `habit:${habit.id}:2026-06-01`,
+  )!;
+  await api.configureHabitReminder(habit.id, first.revision, {
+    enabled: true,
+    time: "15:00",
+    timeZone: "UTC",
+    weekdays: [],
+  });
+  expect(
+    (await db.notificationOccurrences.get(oldOccurrence.idempotencyKey))
+      ?.internalStatus,
+  ).toBe("cancelled");
+  const currentOccurrence = (await api.list()).notifications.find(
+    (row) =>
+      row.occurrenceKey === `habit:${habit.id}:2026-06-01` &&
+      row.internalStatus === "pending",
+  )!;
+  expect(currentOccurrence.fireAtUTC).toBe(Date.UTC(2026, 5, 1, 15));
+  clock = Date.UTC(2026, 5, 1, 15);
+  await api.reconcile(false);
+  await api.complete(currentOccurrence.idempotencyKey);
+  await api.deleteHabit(habit.id, (await db.habits.get(habit.id))!.revision);
+  expect(await db.habits.get(habit.id)).toBeUndefined();
+  expect(
+    (await db.reminderRules.toArray()).filter(
+      (rule) => rule.habitId === habit.id,
+    ),
+  ).toHaveLength(0);
+  expect(
+    (await db.notificationOccurrences.get(currentOccurrence.idempotencyKey))
+      ?.internalStatus,
+  ).toBe("completed");
+  expect(
+    (await api.list()).notifications.filter(
+      (row) =>
+        row.ownerId === habit.id &&
+        ["pending", "due"].includes(row.internalStatus),
+    ),
+  ).toHaveLength(0);
+});
 const eventDraft = {
   title: "Future",
   basis: "gregorian" as const,

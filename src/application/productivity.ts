@@ -94,6 +94,11 @@ function bump<T extends { revision: number; updatedAt: string }>(
 export function createProductivity(
   database: ProductivityDatabase,
   notify: (change: WorkspaceChange) => void = () => {},
+  updateHabitWithCalendar?: (
+    id: string,
+    expected: number,
+    patch: Partial<Pick<HabitRecord, "title" | "frequency" | "reminder">>,
+  ) => Promise<HabitRecord>,
 ) {
   function changed(id: string, revision: number) {
     notify({ type: "workspace", id, revision });
@@ -118,6 +123,7 @@ export function createProductivity(
       id: crypto.randomUUID(),
       title: title.trim(),
       frequency,
+      reminder: null,
       checkIns: [],
       ...stamp(),
     });
@@ -128,8 +134,14 @@ export function createProductivity(
   async function updateHabit(
     id: string,
     expected: number,
-    patch: Pick<HabitRecord, "title" | "frequency">,
+    patch: Partial<Pick<HabitRecord, "title" | "frequency" | "reminder">>,
   ) {
+    if (patch.reminder !== undefined) {
+      if (!updateHabitWithCalendar) throw new WorkspaceError("invalidInput");
+      const row = await updateHabitWithCalendar(id, expected, patch);
+      changed(row.id, row.revision);
+      return row;
+    }
     const row = await database.transaction(
       "rw",
       [database.habits],
@@ -139,8 +151,11 @@ export function createProductivity(
         if (current.revision !== expected) throw new WorkspaceError("conflict");
         const next = habitSchema.parse(
           bump(current, {
-            title: patch.title.trim(),
-            frequency: patch.frequency,
+            title:
+              patch.title === undefined ? current.title : patch.title.trim(),
+            frequency: patch.frequency ?? current.frequency,
+            reminder:
+              patch.reminder === undefined ? current.reminder : patch.reminder,
           }),
         );
         await database.habits.put(next);
