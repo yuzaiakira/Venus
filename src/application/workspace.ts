@@ -18,6 +18,7 @@ import {
   type WidgetRecord,
   type WidgetType,
   WorkspaceError,
+  workspaceSchemaVersion,
 } from "../domain/dashboard";
 import { PluginFlowError } from "../domain/plugins/errors";
 import { instancesPerProfile } from "../domain/plugins/quotas";
@@ -70,6 +71,28 @@ export function createWorkspace(
     const parsed = BootstrapSchema.safeParse(stored);
     if (parsed.success) return parsed.data;
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    // Bootstrap v3 only adds opt-in assistant module flags. Retain every
+    // existing preference instead of falling back to a fresh workspace.
+    if (stored && typeof stored === "object") {
+      const legacy = stored as Record<string, unknown>;
+      const legacyModules =
+        legacy.modules && typeof legacy.modules === "object"
+          ? (legacy.modules as Record<string, unknown>)
+          : {};
+      const migrated = BootstrapSchema.safeParse({
+        ...defaultBootstrap(zone),
+        ...legacy,
+        schemaVersion: workspaceSchemaVersion,
+        modules: {
+          ...defaultBootstrap(zone).modules,
+          ...legacyModules,
+        },
+      });
+      if (migrated.success) {
+        await preferences.set(bootstrapKey, migrated.data);
+        return migrated.data;
+      }
+    }
     const created = defaultBootstrap(zone);
     await preferences.set(bootstrapKey, created);
     return created;
@@ -310,11 +333,13 @@ export function createWorkspace(
     notify({ type: "workspace", id: profileId, revision: Date.now() });
   }
   async function addWidget(profileId: string, type: WidgetType) {
-    const row = widgetFrom(profileId, { type, x: 0, y: 40, w: 1, h: 1 });
     const existing = await db.widgets
       .where("profileId")
       .equals(profileId)
       .toArray();
+    const alreadyAdded = existing.find((widget) => widget.widgetType === type);
+    if (alreadyAdded) return alreadyAdded;
+    const row = widgetFrom(profileId, { type, x: 0, y: 40, w: 1, h: 1 });
     const spot = firstFree(existing, row.w, row.h);
     row.x = spot.x;
     row.y = spot.y;
@@ -508,7 +533,11 @@ export function createWorkspace(
   async function updatePreferences(patch: Partial<Bootstrap>) {
     const run = async () => {
       const current = await readBootstrap();
-      return writeBootstrap({ ...current, ...patch, schemaVersion: 2 });
+      return writeBootstrap({
+        ...current,
+        ...patch,
+        schemaVersion: workspaceSchemaVersion,
+      });
     };
     const next = preferenceWrite.then(run, run);
     preferenceWrite = next;

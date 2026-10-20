@@ -71,6 +71,12 @@ const chrome: Record<
     title: "widget.searchTitle",
     sub: "widget.searchSub",
   },
+  briefing: {
+    icon: "clock",
+    tone: "purple",
+    title: "widget.briefingTitle",
+    sub: "widget.briefingSub",
+  },
 };
 
 export function WidgetChrome(props: {
@@ -203,6 +209,49 @@ export function WidgetBody(props: {
         </button>
         {props.online ? null : <p className="muted">{t("search.offline")}</p>}
       </form>
+    );
+  }
+  if (props.widget.widgetType === "briefing") {
+    const today = previewTodayTasks(props.tasks);
+    const open = today.filter((task) => task.status !== "done");
+    const next = [...props.events].sort(
+      (a, b) =>
+        a.localDate.year - b.localDate.year ||
+        a.localDate.month - b.localDate.month ||
+        a.localDate.day - b.localDate.day,
+    )[0];
+    return (
+      <div className="briefing-widget">
+        <p className="briefing-lead">
+          {open.length
+            ? t("briefing.openTasks").replace("{count}", String(open.length))
+            : t("briefing.clear")}
+        </p>
+        {open.slice(0, 3).map((task) => (
+          <button
+            className="briefing-row"
+            key={task.id}
+            type="button"
+            onClick={() => props.onOpenTask?.(task.id)}
+          >
+            <span aria-hidden="true">○</span> <bdi>{task.title}</bdi>
+          </button>
+        ))}
+        {next ? (
+          <p className="muted briefing-event">
+            {t("briefing.nextEvent")}: <bdi>{next.title}</bdi>
+          </p>
+        ) : (
+          <p className="muted">{t("briefing.noEvent")}</p>
+        )}
+        <button
+          className="btn primary"
+          type="button"
+          onClick={props.onStartTimer}
+        >
+          {t("briefing.focus")}
+        </button>
+      </div>
     );
   }
   if (props.widget.widgetType === "notes") {

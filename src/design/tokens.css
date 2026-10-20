@@ -911,6 +911,33 @@ body[data-scene="dawn"] .space-layer {
   flex: 1;
   min-height: 0;
 }
+.briefing-widget {
+  display: grid;
+  gap: 0.65rem;
+}
+.briefing-lead {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.briefing-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.4rem 0;
+  color: var(--text);
+  text-align: start;
+  overflow: hidden;
+}
+.briefing-row bdi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.briefing-event {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .task-list,
 .note-preview-list,
 .quick-links,

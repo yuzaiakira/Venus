@@ -4,6 +4,7 @@ import {
   createWorkspace,
   memoryPreferences,
 } from "../../src/application/workspace";
+import { defaultBootstrap } from "../../src/domain/dashboard";
 import { db, saveProbe } from "../../src/infrastructure/db";
 
 const probe = {
@@ -156,4 +157,32 @@ it("seeds one default profile across concurrent fresh workspace loads", async ()
     first.updatePreferences({ timeZone: "Not/A_Timezone" }),
   ).rejects.toThrow();
   expect((await first.load()).bootstrap.timeZone).not.toBe("Not/A_Timezone");
+});
+
+it("migrates v2 preferences and keeps assistant widgets singleton per profile", async () => {
+  const current = defaultBootstrap("UTC");
+  const legacy = {
+    ...current,
+    schemaVersion: 2,
+    modules: Object.fromEntries(
+      Object.entries(current.modules).filter(([key]) => key !== "briefing"),
+    ),
+  };
+  const workspace = createWorkspace(
+    memoryPreferences({ "venus.bootstrap": legacy }),
+  );
+  const first = await workspace.load();
+  expect(first.bootstrap.schemaVersion).toBe(3);
+  expect(first.bootstrap.modules.briefing).toBe(true);
+  const profile = first.profiles[0];
+  if (!profile) throw new Error("missing profile");
+  const one = await workspace.addWidget(profile.id, "briefing");
+  const two = await workspace.addWidget(profile.id, "briefing");
+  expect(two.id).toBe(one.id);
+  expect(
+    (await workspace.load()).widgets.filter(
+      (widget) =>
+        widget.profileId === profile.id && widget.widgetType === "briefing",
+    ),
+  ).toHaveLength(1);
 });

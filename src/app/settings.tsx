@@ -84,6 +84,7 @@ export function SettingsScreen(props: {
         today: "nav.tasks",
         timer: "widget.focusTitle",
         notes: "widget.notesTitle",
+        briefing: "widget.briefingTitle",
       }[type] as MessageKey,
     );
   if (!snapshot) {
@@ -669,6 +670,7 @@ export function SettingsScreen(props: {
                       today: true,
                       timer: true,
                       notes: true,
+                      briefing: true,
                     },
                   });
                 if (confirming === "profile" && profile)

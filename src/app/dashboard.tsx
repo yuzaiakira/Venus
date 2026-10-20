@@ -1175,11 +1175,18 @@ export function DashboardScreen(props: {
                         }}
                       >
                         <option value="">{t("edit.add")}</option>
-                        {widgetTypes.map((type) => (
-                          <option key={type} value={type}>
-                            {widgetLabel(type, t)}
-                          </option>
-                        ))}
+                        {widgetTypes
+                          .filter(
+                            (type) =>
+                              !widgets.some(
+                                (widget) => widget.widgetType === type,
+                              ),
+                          )
+                          .map((type) => (
+                            <option key={type} value={type}>
+                              {widgetLabel(type, t)}
+                            </option>
+                          ))}
                       </select>
                     </label>
                   </div>
@@ -1421,6 +1428,7 @@ function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
     today: "nav.tasks",
     timer: "widget.focusTitle",
     notes: "widget.notesTitle",
+    briefing: "widget.briefingTitle",
   };
   return t(labels[type]);
 }
