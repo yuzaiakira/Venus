@@ -179,6 +179,28 @@ export type TaskRecord = z.infer<typeof taskSchema>;
 export type LocalBookmarkRecord = z.infer<typeof localBookmarkSchema>;
 export type BookmarkSnapshotRecord = z.infer<typeof bookmarkSnapshotSchema>;
 
+export const habitSchema = z
+  .object({
+    ...stampSchema,
+    title: z.string().min(1).max(120),
+    frequency: z.enum(["daily", "weekly"]),
+    checkIns: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(730),
+  })
+  .strict();
+export type HabitRecord = z.infer<typeof habitSchema>;
+
+export function habitStreak(habit: HabitRecord, today: string) {
+  if (habit.frequency !== "daily") return habit.checkIns.length;
+  const complete = new Set(habit.checkIns);
+  let cursor = new Date(`${today}T00:00:00Z`);
+  let streak = 0;
+  while (complete.has(cursor.toISOString().slice(0, 10))) {
+    streak += 1;
+    cursor = new Date(cursor.getTime() - 86_400_000);
+  }
+  return streak;
+}
+
 export interface BrowserBookmarkNode {
   id: string;
   title: string;

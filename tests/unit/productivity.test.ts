@@ -65,6 +65,7 @@ function database(): ProductivityDatabase {
     tasks,
     localBookmarks,
     bookmarkSnapshots,
+    habits: table(),
     async transaction(_mode, _tables, work) {
       return work();
     },

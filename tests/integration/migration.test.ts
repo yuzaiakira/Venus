@@ -21,7 +21,7 @@ describe("Dexie version 3 migration", () => {
   it("opens version 3 without deleting version 1 probes", async () => {
     const { db } = await import("../../src/infrastructure/db");
     await db.open();
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7);
     expect(await db.probes.get(probe.id)).toMatchObject({
       state: "pending",
       dueAt: 5,
@@ -31,6 +31,7 @@ describe("Dexie version 3 migration", () => {
       "bookmarkSnapshots",
       "events",
       "folders",
+      "habits",
       "localBookmarks",
       "noteDrafts",
       "notes",
@@ -150,7 +151,7 @@ describe("Dexie version 3 migration", () => {
     });
     version4.close();
     await db.open();
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7);
     expect(await db.probes.get(probe.id)).toMatchObject({ state: "pending" });
     expect(
       await db.notes.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
@@ -228,6 +229,80 @@ it("additively upgrades version 5 task and note records without changing IDs or 
     body: { type: "doc", content: [] },
     revision: 4,
     sortIndex: 0,
+  });
+  db.close();
+});
+
+it("preserves a realistic version 6 workspace and persists habit check-ins after reopen", async () => {
+  const { db } = await import("../../src/infrastructure/db");
+  if (db.isOpen()) db.close();
+  await Dexie.delete("Venus-p00");
+  const legacy = new Dexie("Venus-p00");
+  legacy.version(6).stores({
+    profiles: "id,updatedAt",
+    widgets: "id,profileId",
+    notes: "id, folderId, pinned, trashedAt, updatedAt, sortIndex",
+    tasks: "id, status, dueDate, focusRank, column, sortIndex",
+  });
+  const profileId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const taskId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const noteId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  await legacy.table("profiles").put({
+    id: profileId,
+    title: "Kept",
+    revision: 4,
+    updatedAt: "2026-01-01",
+  });
+  await legacy.table("widgets").put({
+    id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    profileId,
+    widgetType: "today",
+    x: 0,
+    y: 0,
+    w: 1,
+    h: 1,
+    visible: true,
+    revision: 2,
+  });
+  await legacy.table("tasks").put({
+    id: taskId,
+    title: "Kept task",
+    details: "",
+    status: "open",
+    revision: 3,
+    column: "todo",
+    sortIndex: 0,
+  });
+  await legacy.table("notes").put({
+    id: noteId,
+    title: "Kept note",
+    body: { type: "doc", content: [] },
+    revision: 5,
+    sortIndex: 0,
+  });
+  legacy.close();
+  await db.open();
+  expect(db.verno).toBe(7);
+  expect(db.tables.some((table) => table.name === "habits")).toBe(true);
+  expect((await db.profiles.get(profileId))?.id).toBe(profileId);
+  expect((await db.widgets.toArray())[0]?.profileId).toBe(profileId);
+  expect((await db.tasks.get(taskId))?.id).toBe(taskId);
+  expect((await db.notes.get(noteId))?.id).toBe(noteId);
+  const habitId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+  await db.habits.put({
+    id: habitId,
+    title: "Walk",
+    frequency: "daily",
+    checkIns: ["2026-10-20"],
+    revision: 1,
+    createdAt: "2026-10-20",
+    updatedAt: "2026-10-20",
+  });
+  db.close();
+  await db.open();
+  expect(await db.habits.get(habitId)).toMatchObject({
+    id: habitId,
+    checkIns: ["2026-10-20"],
   });
   db.close();
 });

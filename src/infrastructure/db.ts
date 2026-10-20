@@ -15,6 +15,7 @@ import type {
   NoteRecord,
   NoteDraft,
   TaskRecord,
+  HabitRecord,
 } from "../domain/productivity";
 import type {
   PluginInstanceRecord,
@@ -37,6 +38,7 @@ export const db = new Dexie("Venus-p00") as Dexie & {
   noteDrafts: EntityTable<NoteDraft, "id">;
   folders: EntityTable<FolderRecord, "id">;
   tasks: EntityTable<TaskRecord, "id">;
+  habits: EntityTable<HabitRecord, "id">;
   localBookmarks: EntityTable<LocalBookmarkRecord, "id">;
   bookmarkSnapshots: EntityTable<BookmarkSnapshotRecord, "id">;
   events: EntityTable<EventRecord, "id">;
@@ -136,6 +138,7 @@ db.version(6)
       await tx.table("notes").put(note);
     }
   });
+db.version(7).stores({ habits: "id,updatedAt,frequency" });
 export const productivityDb: ProductivityDatabase = {
   notes: db.notes,
   noteDrafts: db.noteDrafts,
@@ -143,6 +146,7 @@ export const productivityDb: ProductivityDatabase = {
   tasks: db.tasks,
   localBookmarks: db.localBookmarks,
   bookmarkSnapshots: db.bookmarkSnapshots,
+  habits: db.habits,
   transaction: (_mode, _tables, work) =>
     db.transaction(
       "rw",
@@ -153,6 +157,7 @@ export const productivityDb: ProductivityDatabase = {
         db.tasks,
         db.localBookmarks,
         db.bookmarkSnapshots,
+        db.habits,
       ],
       work,
     ),

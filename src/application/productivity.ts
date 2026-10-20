@@ -6,6 +6,7 @@ import {
   descendantIds,
   folderCycle,
   folderSchema,
+  habitSchema,
   localBookmarkSchema,
   normalizeTags,
   noteSchema,
@@ -19,6 +20,7 @@ import {
   type BookmarkSnapshotRecord,
   type BrowserBookmarkNode,
   type FolderRecord,
+  type HabitRecord,
   type LocalBookmarkRecord,
   type NoteDocument,
   type NoteRecord,
@@ -40,6 +42,7 @@ export interface ProductivityDatabase {
   tasks: RowTable<TaskRecord>;
   localBookmarks: RowTable<LocalBookmarkRecord>;
   bookmarkSnapshots: RowTable<BookmarkSnapshotRecord>;
+  habits: RowTable<HabitRecord>;
   transaction<T>(
     mode: "rw",
     tables: RowTable<unknown>[],
@@ -52,6 +55,7 @@ export interface Library {
   tasks: TaskRecord[];
   bookmarks: LocalBookmarkRecord[];
   snapshots: BookmarkSnapshotRecord[];
+  habits: HabitRecord[];
 }
 export type BookmarkAccess = "granted" | "missing" | "unsupported";
 export interface BrowserBookmarkPort {
@@ -95,14 +99,93 @@ export function createProductivity(
     notify({ type: "workspace", id, revision });
   }
   async function load(): Promise<Library> {
-    const [notes, folders, tasks, bookmarks, snapshots] = await Promise.all([
-      database.notes.toArray(),
-      database.folders.toArray(),
-      database.tasks.toArray(),
-      database.localBookmarks.toArray(),
-      database.bookmarkSnapshots.toArray(),
-    ]);
-    return { notes, folders, tasks, bookmarks, snapshots };
+    const [notes, folders, tasks, bookmarks, snapshots, habits] =
+      await Promise.all([
+        database.notes.toArray(),
+        database.folders.toArray(),
+        database.tasks.toArray(),
+        database.localBookmarks.toArray(),
+        database.bookmarkSnapshots.toArray(),
+        database.habits.toArray(),
+      ]);
+    return { notes, folders, tasks, bookmarks, snapshots, habits };
+  }
+  async function createHabit(
+    title: string,
+    frequency: HabitRecord["frequency"],
+  ) {
+    const row = habitSchema.parse({
+      id: crypto.randomUUID(),
+      title: title.trim(),
+      frequency,
+      checkIns: [],
+      ...stamp(),
+    });
+    await database.habits.put(row);
+    changed(row.id, row.revision);
+    return row;
+  }
+  async function updateHabit(
+    id: string,
+    expected: number,
+    patch: Pick<HabitRecord, "title" | "frequency">,
+  ) {
+    const row = await database.transaction(
+      "rw",
+      [database.habits],
+      async () => {
+        const current = await database.habits.get(id);
+        if (!current) throw new WorkspaceError("notFound");
+        if (current.revision !== expected) throw new WorkspaceError("conflict");
+        const next = habitSchema.parse(
+          bump(current, {
+            title: patch.title.trim(),
+            frequency: patch.frequency,
+          }),
+        );
+        await database.habits.put(next);
+        return next;
+      },
+    );
+    changed(row.id, row.revision);
+    return row;
+  }
+  async function deleteHabit(id: string, expected: number) {
+    const row = await database.transaction(
+      "rw",
+      [database.habits],
+      async () => {
+        const current = await database.habits.get(id);
+        if (!current) throw new WorkspaceError("notFound");
+        if (current.revision !== expected) throw new WorkspaceError("conflict");
+        await database.habits.delete(id);
+        return current;
+      },
+    );
+    changed(row.id, row.revision + 1);
+  }
+  async function toggleHabit(id: string, expected: number, date: string) {
+    const row = await database.transaction(
+      "rw",
+      [database.habits],
+      async () => {
+        const current = await database.habits.get(id);
+        if (!current) throw new WorkspaceError("notFound");
+        if (current.revision !== expected) throw new WorkspaceError("conflict");
+        const has = current.checkIns.includes(date);
+        const next = {
+          ...bump(current, {
+            checkIns: has
+              ? current.checkIns.filter((item) => item !== date)
+              : [...current.checkIns, date].sort(),
+          }),
+        };
+        await database.habits.put(next);
+        return next;
+      },
+    );
+    changed(row.id, row.revision);
+    return row;
   }
   async function createFolder(
     scope: FolderRecord["scope"],
@@ -695,6 +778,10 @@ export function createProductivity(
   return {
     load,
     createFolder,
+    createHabit,
+    toggleHabit,
+    updateHabit,
+    deleteHabit,
     updateFolder,
     deleteFolder,
     createNote,
