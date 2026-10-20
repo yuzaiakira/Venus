@@ -106,10 +106,17 @@ try {
   });
   page.on("pageerror", (error) => evidence.consoleErrors.push(String(error)));
   await page.goto("chrome://newtab/");
-  await page.getByRole("heading", { name: "Venus", exact: true }).waitFor();
+  await page
+    .getByRole("navigation", { name: "Dashboard", exact: true })
+    .waitFor({ timeout: 15_000 });
+  await page
+    .getByRole("button", { name: "Habit tracker", exact: true })
+    .waitFor({ timeout: 15_000 });
   await page.getByRole("button", { name: "Skip setup", exact: true }).click();
   await page.locator(".dialog-backdrop").waitFor({ state: "hidden" });
-  await page.getByRole("button", { name: "Habits", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Habit tracker", exact: true })
+    .click();
   await page
     .getByRole("heading", { name: "Habit tracker", exact: true })
     .waitFor();
@@ -164,7 +171,9 @@ try {
   evidence.checks.push("create-edit-save-materialize");
 
   await page.reload();
-  await page.getByRole("button", { name: "Habits", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Habit tracker", exact: true })
+    .click();
   const reloadedRow = page.locator("li", { hasText: savedTitle });
   await reloadedRow
     .getByRole("checkbox", { name: "Enable reminder" })
@@ -260,7 +269,9 @@ try {
   evidence.checks.push("alarm-notification-center-done-next-occurrence");
   await page.screenshot({ path: join(evidenceDir, "habit-reminder-en.png") });
 
-  await page.getByRole("button", { name: "Habits", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Habit tracker", exact: true })
+    .click();
   const completedRow = page.locator("li", { hasText: savedTitle });
   await completedRow
     .getByRole("checkbox", { name: "Enable reminder" })

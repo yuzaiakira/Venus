@@ -74,7 +74,29 @@ export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
   await mkdir(evidenceDir, { recursive: true });
   try {
     const title = "Firefox reminder habit";
-    await driver.findElement(By.css('[aria-label="Habits"]')).click();
+    const skipSetup = await driver.findElements(
+      By.xpath("//button[normalize-space()='Skip setup']"),
+    );
+    if (skipSetup.length > 0) {
+      await skipSetup[0].click();
+      await driver.wait(
+        async () =>
+          (await driver.findElements(By.css(".dialog-backdrop"))).length === 0,
+        10_000,
+        "Firefox onboarding dialog did not close after Skip setup",
+      );
+    }
+    await driver.findElement(By.css('[aria-label="Habit tracker"]')).click();
+    await driver.wait(
+      async () =>
+        (
+          await driver.findElements(
+            By.xpath("//h1[normalize-space()='Habit tracker']"),
+          )
+        ).length > 0,
+      10_000,
+      "Firefox did not open the Habit tracker screen",
+    );
     evidence.permission = await driver
       .findElement(By.css(".cluster[role='status']"))
       .getText();

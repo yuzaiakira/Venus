@@ -124,7 +124,12 @@ try {
   // This must be Chrome's New Tab URL. Opening an extension URL directly does
   // not prove that the extension replaced the browser's New Tab page.
   await page.goto("chrome://newtab/");
-  await page.getByRole("heading", { name: "Venus", exact: true }).waitFor();
+  await page
+    .getByRole("navigation", { name: "Dashboard", exact: true })
+    .waitFor({ timeout: 15_000 });
+  await page
+    .getByRole("button", { name: "Habit tracker", exact: true })
+    .waitFor({ timeout: 15_000 });
   await collectPageEvidence("success");
   await page.screenshot({ path: join(evidenceDir, "chrome-newtab.png") });
 
