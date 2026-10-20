@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, dirname, basename } from "node:path";
 import { execFileSync } from "node:child_process";
+import { verifyHabitReminderFirefox } from "./habit-reminder-firefox.mjs";
 import {
   mkdir,
   writeFile,
@@ -18,18 +19,33 @@ import {
   symlink,
   copyFile,
 } from "node:fs/promises";
-const binary = process.env.FIREFOX_BIN ?? "/usr/bin/firefox";
 const evidenceDir = process.env.P00_EVIDENCE_DIR ?? "evidence/P00";
+const cachedBrowser = existsSync(".browser-cache/driver.json")
+  ? JSON.parse(readFileSync(".browser-cache/driver.json", "utf8")).firefox
+  : undefined;
+const binary =
+  process.env.FIREFOX_BIN ??
+  (cachedBrowser && existsSync(cachedBrowser)
+    ? cachedBrowser
+    : "/usr/bin/firefox");
+await mkdir(evidenceDir, { recursive: true });
+async function preflightFailure(message) {
+  await writeFile(
+    join(evidenceDir, "firefox-smoke-failure.json"),
+    JSON.stringify({ binary, error: message }, null, 2),
+  );
+  throw new Error(message);
+}
 if (!existsSync(binary))
-  throw new Error("Firefox smoke FAILED: browser binary unavailable");
+  await preflightFailure("Firefox smoke FAILED: browser binary unavailable");
 if (!existsSync(".output/firefox-mv3/manifest.json"))
-  throw new Error("Firefox smoke FAILED: build missing");
+  await preflightFailure("Firefox smoke FAILED: build missing");
 const cachedDriver = existsSync(".browser-cache/driver.json")
   ? JSON.parse(readFileSync(".browser-cache/driver.json", "utf8")).geckodriver
   : undefined;
 const driverPath = process.env.GECKODRIVER_BIN ?? cachedDriver;
 if (!driverPath || !existsSync(driverPath))
-  throw new Error(
+  await preflightFailure(
     "Firefox smoke FAILED: set GECKODRIVER_BIN to installed driver. No automatic download/pass.",
   );
 const { Builder, By, until } = await import("selenium-webdriver");
@@ -197,6 +213,11 @@ try {
   );
   if (!apiEvidence.ok)
     throw new Error("Firefox API probe failed: " + apiEvidence.error);
+  const habitReminder = await verifyHabitReminderFirefox(
+    driver,
+    By,
+    evidenceDir,
+  );
   await mkdir(evidenceDir, { recursive: true });
   await writeFile(
     join(evidenceDir, "firefox-newtab.png"),
@@ -255,6 +276,7 @@ try {
         homeConsent: "NOT_RUN",
         home,
         apiEvidence: apiEvidence.value,
+        habitReminder,
         identityEvidence,
         apiLifecycle:
           "PARTIAL: permission consent, alarm firing/restart and OS display remain manual",

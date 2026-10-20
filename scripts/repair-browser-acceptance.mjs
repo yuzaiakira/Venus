@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, expect } from "@playwright/test";
+import { chromiumExecutable } from "./chromium-executable.mjs";
 
 // Exercise the production extension, offline, in an isolated profile. Never
 // disable the browser sandbox to make acceptance pass on an unsupported host.
@@ -12,9 +13,7 @@ const evidence = resolve(
 );
 await mkdir(evidence, { recursive: true });
 const profile = await mkdtemp(join(tmpdir(), "venus-repair-"));
-const executablePath =
-  process.env.CHROME_BIN ??
-  ["/usr/bin/chromium", "/usr/bin/google-chrome"].find(existsSync);
+const executablePath = chromiumExecutable(chromium);
 const extension = resolve(".output/chrome-mv3");
 const results = [];
 let context;

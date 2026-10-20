@@ -4,16 +4,10 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
+import { chromiumExecutable } from "./chromium-executable.mjs";
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= resolve(".browser-cache");
 const { chromium } = await import("@playwright/test");
-const executablePath =
-  process.env.CHROME_BIN ??
-  [
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-  ].find(existsSync) ??
-  chromium.executablePath();
+const executablePath = chromiumExecutable(chromium);
 if (!executablePath || !existsSync(executablePath))
   throw new Error(
     "Chrome smoke FAILED: no CHROME_BIN/browser executable. No pass or skip.",
@@ -76,6 +70,24 @@ try {
   );
   if (process.env.P00_LIFECYCLE === "1")
     await chromeLifecycle(context, launch, evidenceDir);
+} catch (error) {
+  await mkdir(evidenceDir, { recursive: true });
+  await writeFile(
+    join(evidenceDir, "chrome-smoke-failure.json"),
+    JSON.stringify(
+      {
+        executablePath,
+        sandbox: true,
+        error:
+          error instanceof Error
+            ? (error.stack ?? error.message)
+            : String(error),
+      },
+      null,
+      2,
+    ),
+  );
+  throw error;
 } finally {
   await context?.close();
   await rm(profile, { recursive: true, force: true });

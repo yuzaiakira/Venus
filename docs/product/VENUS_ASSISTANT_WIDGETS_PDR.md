@@ -45,7 +45,7 @@ equivalent transactional service operation.
 | Daily Briefing      | Know what matters now               | Top Today tasks, next calendar event and focus action; direct task opening                         | Reads existing local tasks, events and timer only                 | ✅ Implemented |
 | Quick Capture       | Save an idea in seconds             | Capture task, note or event; title-first entry; Today toggle; clear success/failure state          | Uses existing local capture services                              | ✅ Implemented |
 | AI Inbox            | Triage incoming material            | Review queue, classify to task/note/event, confidence/explanation, edit before save, reject/undo   | Local rules first; no remote AI without explicit opt-in           | ⬜ Planned     |
-| Habit Tracker       | Maintain routines                   | Daily/weekly habits, check-in, streak, schedule, missed state, history and reminder integration    | Local habit/check-in records                                      | ⬜ Planned     |
+| Habit Tracker       | Maintain routines                   | Daily/weekly habits, check-in, streak, schedule, missed state, history and reminder integration    | Local habit/check-in records                                      | 🟡 Implementation verified; browser acceptance pending |
 | Goals & Progress    | Connect work to outcomes            | Goals, time frame, measurable progress, linked tasks/habits, milestones, weekly review             | Local goal, milestone and relation records                        | ⬜ Planned     |
 | Weather & Commute   | Prepare for the next commitment     | Location consent, forecast, event travel buffer, refresh time, graceful unavailable state          | Location/network are opt-in; cache minimally                      | ⬜ Planned     |
 | Focus Coach         | Protect usable focus time           | Free-time suggestions, start timer, defer/snooze, explain conflicts, never auto-edit calendar      | Reads local tasks/events/timer; recommendations local first       | ⬜ Planned     |
@@ -60,7 +60,7 @@ equivalent transactional service operation.
 2. **Daily Briefing** — read-only synthesis of existing workspace data and
    direct actions. ✅ Implemented
 3. **Quick Capture** — a dashboard capture card using existing creation flows. ✅ Implemented
-4. **Habit Tracker** — new local schema, history and dashboard card. ⬜
+4. **Habit Tracker** — local schema, history, dashboard card and reminder workflow. 🟡 Implementation verified; browser acceptance pending.
 5. **Goals & Progress** — goals/milestones and task/habit links. ⬜
 6. **Knowledge Review** — review scheduling for existing notes. ⬜
 7. **People & Follow-ups** — local CRM-style follow-up flow. ⬜
@@ -80,6 +80,25 @@ be added/removed/reordered without duplicate standard instances, its primary
 actions work, unit and integration coverage is added where logic changes, and
 the documented validation commands pass. Browser acceptance remains a separate
 gate while this cloud environment cannot launch a supported browser.
+
+## Habit Tracker verification status — 2026-10-20
+
+- **Implementation and automated tests:** verified. The local Dexie v6 → v8
+  migration tests preserve existing workspace records, event/task reminders and
+  add habit-owned reminder indexing. Unit and integration tests cover habit
+  scheduling, reminder materialization, notification completion and persisted
+  check-ins.
+- **PDR widget acceptance:** implementation requirements are covered by the
+  automated validation suite; the widget stays marked 🟡 until browser
+  acceptance is executed.
+- **Real-browser acceptance:** blocked in this cloud environment. Firefox is
+  not installed, and Chrome cannot start with its required sandbox because the
+  system sandbox helper is not root-owned. The CI browser suite includes the
+  corresponding Firefox and Chrome exercises and records evidence when a
+  supported runner is available.
+- **Release readiness:** blocked on successful Firefox and Chrome acceptance;
+  native notification API acceptance and operating-system notification display
+  are separately recorded and are never inferred from application tests.
 
 ## Non-goals for this delivery
 

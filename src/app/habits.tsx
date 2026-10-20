@@ -112,12 +112,14 @@ export function HabitsScreen(props: {
         <input
           className="field"
           value={title}
+          aria-label={props.locale === "fa" ? "نام عادت" : "Habit name"}
           placeholder={props.locale === "fa" ? "نام عادت" : "Habit name"}
           onChange={(e) => setTitle(e.target.value)}
         />
         <select
           className="select"
           value={frequency}
+          aria-label={props.locale === "fa" ? "برنامه عادت" : "Habit schedule"}
           onChange={(e) => setFrequency(e.target.value as "daily" | "weekly")}
         >
           <option value="daily">
@@ -302,11 +304,15 @@ function HabitRow(props: {
           <input
             className="field"
             value={title}
+            aria-label={props.locale === "fa" ? "نام عادت" : "Habit name"}
             onChange={(e) => setTitle(e.target.value)}
           />
           <select
             className="select"
             value={frequency}
+            aria-label={
+              props.locale === "fa" ? "برنامه عادت" : "Habit schedule"
+            }
             onChange={(event) =>
               setFrequency(event.target.value as "daily" | "weekly")
             }
@@ -343,13 +349,14 @@ function HabitRow(props: {
       <div className="cluster">
         <button
           className="btn primary"
-          onClick={() =>
-            void props.productivity.toggleHabit(
-              props.habit.id,
-              props.habit.revision,
-              props.today,
-            )
-          }
+          onClick={() => {
+            setSaveState("saving");
+            void props.productivity
+              .toggleHabit(props.habit.id, props.habit.revision, props.today)
+              .then(props.onChanged)
+              .then(() => setSaveState("idle"))
+              .catch(() => setSaveState("error"));
+          }}
         >
           {done
             ? props.locale === "fa"
