@@ -41,9 +41,7 @@ try {
   context = await launch();
   const page = await context.newPage();
   await page.goto("chrome://newtab/");
-  await page
-    .getByRole("heading", { name: "Venus", exact: true })
-    .waitFor({ timeout: 15000 });
+  await page.locator(".hero h1").waitFor({ timeout: 15000 });
   await mkdir(evidenceDir, { recursive: true });
   await page.screenshot({ path: join(evidenceDir, "chrome-newtab.png") });
   const optionsUrl = await page.evaluate(() =>

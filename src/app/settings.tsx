@@ -13,13 +13,16 @@ import { translate, type MessageKey } from "../locales/messages";
 import { App } from "./App";
 import { applyDocument, paintUploadedWallpaper } from "./document";
 
-export function SettingsScreen(props: { workspace: Workspace }) {
+export function SettingsScreen(props: {
+  workspace: Workspace;
+  onHome?: () => void;
+}) {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
   const [confirming, setConfirming] = useState<
-    "appearance" | "layout" | "modules" | ""
+    "appearance" | "layout" | "modules" | "profile" | ""
   >("");
   const [title, setTitle] = useState("");
 
@@ -121,10 +124,19 @@ export function SettingsScreen(props: { workspace: Workspace }) {
   }
 
   return (
-    <main className="shell">
-      <header className="topbar">
+    <main className="settings-screen module">
+      <header className="page-header">
         <h1>{t("nav.settings")}</h1>
-        <a className="btn" href="newtab.html">
+        <a
+          className="btn"
+          href="newtab.html"
+          onClick={(event) => {
+            if (props.onHome) {
+              event.preventDefault();
+              props.onHome();
+            }
+          }}
+        >
           {t("app.title")}
         </a>
       </header>
@@ -138,16 +150,28 @@ export function SettingsScreen(props: { workspace: Workspace }) {
       {error ? <p className="error">{error}</p> : null}
       <div className="settings-layout">
         <nav className="glass" aria-label={t("nav.settings")}>
-          <p>{t("settings.language")}</p>
-          <p>{t("settings.appearance")}</p>
-          <p>{t("settings.modules")}</p>
-          <p>{t("settings.layout")}</p>
-          <p>{t("settings.home")}</p>
-          <p>{t("settings.platform")}</p>
+          {(
+            [
+              "language",
+              "appearance",
+              "modules",
+              "layout",
+              "home",
+              "platform",
+            ] as const
+          ).map((section) => (
+            <a
+              className="btn"
+              key={section}
+              href={`#venus-settings-${section}`}
+            >
+              {t(`settings.${section}`)}
+            </a>
+          ))}
         </nav>
         <div>
           {show(t("settings.language")) ? (
-            <section className="glass">
+            <section className="glass" id="venus-settings-language">
               <h2>{t("settings.language")}</h2>
               <label>
                 {t("settings.locale")}
@@ -239,27 +263,15 @@ export function SettingsScreen(props: { workspace: Workspace }) {
                   <option value="6">{t("week.saturday")}</option>
                 </select>
               </label>
-              <label>
-                {t("settings.zone")}
-                <input
-                  className="field"
-                  value={snapshot.bootstrap.timeZone}
-                  onChange={(event) => {
-                    try {
-                      Intl.DateTimeFormat(undefined, {
-                        timeZone: event.target.value,
-                      });
-                      void save({ timeZone: event.target.value });
-                    } catch {
-                      setError(t("settings.error"));
-                    }
-                  }}
-                />
-              </label>
+              <TimeZoneField
+                locale={locale}
+                value={snapshot.bootstrap.timeZone}
+                onSave={(timeZone) => save({ timeZone })}
+              />
             </section>
           ) : null}
           {show(t("settings.appearance")) && profile ? (
-            <section className="glass">
+            <section className="glass" id="venus-settings-appearance">
               <h2>{t("settings.appearance")}</h2>
               <label>
                 {t("settings.theme")}
@@ -467,7 +479,7 @@ export function SettingsScreen(props: { workspace: Workspace }) {
             </section>
           ) : null}
           {show(t("settings.modules")) ? (
-            <section className="glass">
+            <section className="glass" id="venus-settings-modules">
               <h2>{t("settings.modules")}</h2>
               {widgetTypes.map((type) => (
                 <label key={type}>
@@ -496,7 +508,7 @@ export function SettingsScreen(props: { workspace: Workspace }) {
             </section>
           ) : null}
           {show(t("settings.layout")) && profile ? (
-            <section className="glass">
+            <section className="glass" id="venus-settings-layout">
               <h2>{t("settings.layout")}</h2>
               <label>
                 {t("profile.create")}
@@ -567,7 +579,7 @@ export function SettingsScreen(props: { workspace: Workspace }) {
               <button
                 className="btn"
                 type="button"
-                onClick={() => void props.workspace.deleteProfile(profile.id)}
+                onClick={() => setConfirming("profile")}
               >
                 {t("profile.delete")}
               </button>
@@ -592,7 +604,7 @@ export function SettingsScreen(props: { workspace: Workspace }) {
             </section>
           ) : null}
           {show(t("settings.home")) ? (
-            <section className="glass">
+            <section className="glass" id="venus-settings-home">
               <h2>{t("settings.home")}</h2>
               <p>{t("home.firefox")}</p>
               <p>{t("home.chrome")}</p>
@@ -600,7 +612,7 @@ export function SettingsScreen(props: { workspace: Workspace }) {
             </section>
           ) : null}
           {show(t("settings.platform")) ? (
-            <section className="glass">
+            <section className="glass" id="venus-settings-platform">
               <h2>{t("settings.platform")}</h2>
               <p>{t("settings.probes")}</p>
               <App />
@@ -616,7 +628,13 @@ export function SettingsScreen(props: { workspace: Workspace }) {
             aria-modal="true"
             aria-label={t("settings.confirm")}
           >
-            <p>{t("settings.confirm")}</p>
+            <p>
+              {t(
+                confirming === "profile"
+                  ? "repair.confirmDelete"
+                  : "settings.confirm",
+              )}
+            </p>
             <button
               className="btn primary"
               type="button"
@@ -641,6 +659,10 @@ export function SettingsScreen(props: { workspace: Workspace }) {
                       notes: true,
                     },
                   });
+                if (confirming === "profile" && profile)
+                  void props.workspace
+                    .deleteProfile(profile.id)
+                    .catch(() => setError(t("settings.error")));
                 if (confirming === "layout" && profile)
                   void props.workspace.resetLayout(profile.id, "minimal");
                 setConfirming("");
@@ -758,6 +780,48 @@ function SearchProviderFields(props: {
       <button className="btn" type="submit">
         {t("search.saveProvider")}
       </button>
+    </form>
+  );
+}
+
+function TimeZoneField(props: {
+  locale: "en" | "fa";
+  value: string;
+  onSave: (zone: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState(props.value);
+  const [error, setError] = useState("");
+  const t = (key: MessageKey) => translate(props.locale, key);
+  useEffect(() => setValue(props.value), [props.value]);
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: value }).format(0);
+          setError("");
+          void props.onSave(value);
+        } catch {
+          setError(t("settings.error"));
+        }
+      }}
+    >
+      <label>
+        {t("settings.zone")}
+        <input
+          className="field"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+        />
+      </label>
+      <button className="btn" type="submit">
+        {t("settings.save")}
+      </button>
+      {error ? (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      ) : null}
     </form>
   );
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { createCalendar } from "../application/calendar";
 import type {
   NotificationRecord,
@@ -17,6 +18,7 @@ export function NotificationCenter(props: {
   onChanged: () => Promise<void>;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
+  const [error, setError] = useState("");
   const upcoming = props.rows.filter((row) => row.internalStatus === "pending");
   const open = props.rows.filter((row) =>
     ["due", "missed"].includes(row.internalStatus),
@@ -28,6 +30,11 @@ export function NotificationCenter(props: {
   );
   return (
     <section className="glass menu" aria-live="polite">
+      {error ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <h2>{t("nav.notifications")}</h2>
       <p>{t("calendar.closedBrowser")}</p>
       <p className="muted">{t("notify.unobserved")}</p>
@@ -63,7 +70,8 @@ export function NotificationCenter(props: {
               end: String(data.get("end") ?? "07:00"),
               timeZone: props.quiet.timeZone,
             })
-            .then(props.onChanged);
+            .then(props.onChanged)
+            .catch(() => setError(t("settings.error")));
         }}
       >
         <label>
@@ -107,9 +115,15 @@ function NotificationList(props: {
   onChanged: () => Promise<void>;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
+  const [error, setError] = useState("");
   if (props.rows.length === 0) return <p>{t("notify.empty")}</p>;
   return (
     <ul>
+      {error ? (
+        <li className="error" role="alert">
+          {error}
+        </li>
+      ) : null}
       {props.rows.map((row) => (
         <li key={row.idempotencyKey}>
           <button
@@ -119,6 +133,7 @@ function NotificationList(props: {
               void props.calendar
                 .markRead(row.idempotencyKey)
                 .then(props.onChanged)
+                .catch(() => setError(t("settings.error")))
             }
           >
             <bdi>{row.title}</bdi>
@@ -136,6 +151,7 @@ function NotificationList(props: {
               void props.calendar
                 .snooze(row.idempotencyKey, 10)
                 .then(props.onChanged)
+                .catch(() => setError(t("settings.error")))
             }
           >
             {t("notify.snooze")}
@@ -147,6 +163,7 @@ function NotificationList(props: {
               void props.calendar
                 .complete(row.idempotencyKey)
                 .then(props.onChanged)
+                .catch(() => setError(t("settings.error")))
             }
           >
             {t("notify.done")}
@@ -158,6 +175,7 @@ function NotificationList(props: {
               void props.calendar
                 .dismiss(row.idempotencyKey)
                 .then(props.onChanged)
+                .catch(() => setError(t("settings.error")))
             }
           >
             {t("notify.dismiss")}
@@ -175,69 +193,139 @@ function TimerControls(props: {
   onChanged: () => Promise<void>;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
+  const [mode, setMode] = useState<"pomodoro" | "countdown">("pomodoro");
+  const [minutes, setMinutes] = useState(25);
+  const [autoNext, setAutoNext] = useState(false);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
   const remaining =
     props.timer?.status === "running" && props.timer.endsAtUTC
       ? Math.max(0, props.timer.endsAtUTC - Date.now())
-      : null;
+      : props.timer?.status === "paused"
+        ? Math.max(0, props.timer.durationMs - props.timer.elapsedBeforePauseMs)
+        : null;
+  async function run(work: () => Promise<unknown>) {
+    if (pending) return;
+    setPending(true);
+    setError("");
+    try {
+      await work();
+      await props.onChanged();
+    } catch {
+      setError(t("settings.error"));
+    } finally {
+      setPending(false);
+    }
+  }
   return (
     <div>
       <h3>{t("timer.heading")}</h3>
-      {props.timer ? (
-        <p>
-          {props.timer.cycleStep} · {props.timer.status}
-          {remaining !== null ? ` · ${Math.ceil(remaining / 1000)}s` : ""}
+      <p>
+        {props.timer
+          ? `${props.timer.cycleStep} · ${props.timer.status} · ${Math.ceil((remaining ?? 0) / 1000)}s`
+          : t("timer.none")}
+      </p>
+      {props.timer?.clockWarning ? (
+        <p className="error" role="alert">
+          {t("timer.clockWarning")}
         </p>
+      ) : null}
+      {!props.timer || !["running", "paused"].includes(props.timer.status) ? (
+        <form
+          className="cluster"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (Number.isFinite(minutes) && minutes >= 1 && minutes <= 1440)
+              void run(() =>
+                props.calendar.startTimer({
+                  mode,
+                  durationMs: minutes * 60_000,
+                  autoNext: mode === "pomodoro" && autoNext,
+                }),
+              );
+          }}
+        >
+          <label>
+            {t("timer.mode")}
+            <select
+              className="select"
+              value={mode}
+              onChange={(event) =>
+                setMode(event.target.value as "pomodoro" | "countdown")
+              }
+            >
+              <option value="pomodoro">{t("timer.pomodoro")}</option>
+              <option value="countdown">{t("timer.countdown")}</option>
+            </select>
+          </label>
+          <label>
+            {t("timer.minutes")}
+            <input
+              className="field"
+              type="number"
+              min="1"
+              max="1440"
+              required
+              value={minutes}
+              onChange={(event) => setMinutes(Number(event.target.value))}
+            />
+          </label>
+          {mode === "pomodoro" ? (
+            <label>
+              <input
+                type="checkbox"
+                checked={autoNext}
+                onChange={(event) => setAutoNext(event.target.checked)}
+              />
+              {t("timer.autoNext")}
+            </label>
+          ) : null}
+          <button className="btn primary" type="submit" disabled={pending}>
+            {t("timer.start")}
+          </button>
+        </form>
       ) : (
-        <p>{t("timer.none")}</p>
-      )}
-      <button
-        className="btn"
-        type="button"
-        onClick={() =>
-          void props.calendar
-            .startTimer({ mode: "pomodoro", durationMs: 25 * 60_000 })
-            .then(props.onChanged)
-            .catch(() => undefined)
-        }
-      >
-        {t("timer.start")}
-      </button>
-      {props.timer ? (
-        <>
+        <div className="cluster">
+          {props.timer.status === "running" ? (
+            <button
+              className="btn"
+              disabled={pending}
+              type="button"
+              onClick={() =>
+                void run(() => props.calendar.pauseTimer(props.timer!.id))
+              }
+            >
+              {t("timer.pause")}
+            </button>
+          ) : null}
+          {props.timer.status === "paused" ? (
+            <button
+              className="btn"
+              disabled={pending}
+              type="button"
+              onClick={() =>
+                void run(() => props.calendar.resumeTimer(props.timer!.id))
+              }
+            >
+              {t("timer.resume")}
+            </button>
+          ) : null}
           <button
             className="btn"
+            disabled={pending}
             type="button"
             onClick={() =>
-              void props.calendar
-                .pauseTimer(props.timer!.id)
-                .then(props.onChanged)
-            }
-          >
-            {t("timer.pause")}
-          </button>
-          <button
-            className="btn"
-            type="button"
-            onClick={() =>
-              void props.calendar
-                .resumeTimer(props.timer!.id)
-                .then(props.onChanged)
-            }
-          >
-            {t("timer.resume")}
-          </button>
-          <button
-            className="btn"
-            type="button"
-            onClick={() =>
-              void props.calendar
-                .resetTimer(props.timer!.id)
-                .then(props.onChanged)
+              void run(() => props.calendar.resetTimer(props.timer!.id))
             }
           >
             {t("timer.reset")}
           </button>
-        </>
+        </div>
+      )}
+      {error ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
       ) : null}
     </div>
   );

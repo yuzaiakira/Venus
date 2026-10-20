@@ -329,9 +329,7 @@ try {
   const importStarted = Date.now();
   await input.sendKeys(join(downloads, exported[0]));
   await driver.wait(
-    until.elementLocated(
-      By.xpath('//button[normalize-space()="Install"]'),
-    ),
+    until.elementLocated(By.xpath('//button[normalize-space()="Install"]')),
     15000,
   );
   evidence.importPreviewMs = Date.now() - importStarted;

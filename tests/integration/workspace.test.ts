@@ -136,3 +136,24 @@ describe("P01 workspace persistence", () => {
     ).rejects.toThrow("invalidInput");
   });
 });
+
+it("seeds one default profile across concurrent fresh workspace loads", async () => {
+  const preferences = memoryPreferences();
+  const first = createWorkspace(preferences),
+    second = createWorkspace(preferences);
+  const snapshots = await Promise.all([
+    first.load(),
+    second.load(),
+    first.load(),
+  ]);
+  expect(await db.profiles.count()).toBe(1);
+  expect(await db.widgets.count()).toBe(2);
+  expect(
+    new Set(snapshots.map((snapshot) => snapshot.bootstrap.selectedProfileId))
+      .size,
+  ).toBe(1);
+  await expect(
+    first.updatePreferences({ timeZone: "Not/A_Timezone" }),
+  ).rejects.toThrow();
+  expect((await first.load()).bootstrap.timeZone).not.toBe("Not/A_Timezone");
+});

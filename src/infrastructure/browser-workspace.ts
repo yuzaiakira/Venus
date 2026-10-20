@@ -1,3 +1,4 @@
+import { liveQuery } from "dexie";
 import { browser } from "wxt/browser";
 import { createCalendar } from "../application/calendar";
 import { createProductivity } from "../application/productivity";
@@ -33,7 +34,18 @@ export const workspace = createWorkspace(
       const onMessage = () => listener();
       channel?.addEventListener("message", onMessage);
       localListeners.add(listener);
+      // Calendar/background writes do not pass through workspace.publish.
+      // Dexie observes committed changes across extension contexts.
+      const databaseChanges = liveQuery(async () =>
+        Promise.all([
+          db.events.toArray(),
+          db.timerSessions.toArray(),
+          db.notificationOccurrences.toArray(),
+          db.quietHours.toArray(),
+        ]),
+      ).subscribe({ next: () => listener(), error: () => listener() });
       return () => {
+        databaseChanges.unsubscribe();
         localListeners.delete(listener);
         browser.storage.onChanged.removeListener(onChanged);
         channel?.removeEventListener("message", onMessage);
@@ -61,7 +73,13 @@ export const calendar = createCalendar({
   alarms: sweepAlarmPort,
   notifications: productNotifications,
   completeTask: async (id, revision) => {
-    await productivity.saveTask(id, revision, { status: "done" });
+    const task = (await productivity.load()).tasks.find(
+      (task) => task.id === id,
+    );
+    if (!task) throw new Error("Task not found");
+    await productivity.saveTask(id, revision ?? task.revision, {
+      status: "done",
+    });
   },
 });
 

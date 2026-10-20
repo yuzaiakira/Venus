@@ -34,6 +34,10 @@ export function CalendarPanel(props: {
   );
   const [selected, setSelected] = useState<string | null>(null);
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [zoneId, setZoneId] = useState(props.bootstrap.timeZone);
+  const [minute, setMinute] = useState(0);
+  const [untilText, setUntilText] = useState("");
   const [basis, setBasis] = useState<CalendarBasis>(display);
   const [allDay, setAllDay] = useState(true);
   const [freq, setFreq] = useState<"DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY">(
@@ -68,13 +72,79 @@ export function CalendarPanel(props: {
   ];
   const current = props.events.find((event) => event.id === selected) ?? null;
   useEffect(() => {
+    setCursor((date) => convertDate(date, display));
+  }, [display]);
+  useEffect(() => {
+    const event = props.events.find((row) => row.id === selected);
+    if (!event) return;
+    setTitle(event.title);
+    setDescription(event.description);
+    setZoneId(event.zoneId);
+    setAllDay(event.allDay);
+    setHour(event.wall?.hour ?? 9);
+    setMinute(event.wall?.minute ?? 0);
+    setBasis(event.calendarBasis);
+    setCursor(convertDate(event.localDate, display));
+    setFold(event.foldPolicy);
+    const rule = event.recurrenceSpec;
+    setRepeat(!!rule);
+    setFreq(rule?.freq ?? "WEEKLY");
+    setInterval(rule?.interval ?? 1);
+    setWeekdays(rule?.byWeekdays ?? []);
+    setOrdinal(
+      rule?.ordinalWeekday
+        ? (String(rule.ordinalWeekday.ordinal) as typeof ordinal)
+        : "none",
+    );
+    setOrdinalWeekday(rule?.ordinalWeekday?.weekday ?? 4);
+    setBound(rule?.count ? "count" : rule?.untilLocalDate ? "until" : "none");
+    setCount(rule?.count ?? 4);
+    setInvalidDay(rule?.invalidDayPolicy ?? "skip");
+    const until = rule?.untilLocalDate;
+    setUntilText(
+      until
+        ? `${until.year}-${String(until.month).padStart(2, "0")}-${String(until.day).padStart(2, "0")}`
+        : "",
+    );
+    let active = true;
+    void props.calendar
+      .list()
+      .then((schedule) => {
+        if (!active) return;
+        const rules = schedule.rules.filter((row) => row.eventId === event.id);
+        const relative = rules.find((row) => row.offsetMinutes !== null);
+        setOffset(relative?.offsetMinutes ?? 15);
+        setImportant(relative?.quietHoursOverride ?? false);
+        const absolute = rules.find((row) => row.absoluteTime !== null);
+        setAbsolute(
+          absolute?.absoluteTime
+            ? new Date(absolute.absoluteTime).toISOString()
+            : "",
+        );
+      })
+      .catch(() => setStatus(t("calendar.failed")));
+    return () => {
+      active = false;
+    };
+  }, [selected]);
+  useEffect(() => {
     if (!current) {
       setGenerated([]);
       return;
     }
-    void props.calendar.occurrences(current.id).then(setGenerated);
+    void props.calendar
+      .occurrences(current.id)
+      .then(setGenerated)
+      .catch(() => setStatus(t("calendar.failed")));
   }, [current, props.calendar]);
   function draftSpec() {
+    const calendar = current ? current.calendarBasis : basis;
+    const pieces = untilText.split("-").map(Number);
+    if (
+      bound === "until" &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(untilText) || pieces.length !== 3)
+    )
+      throw new Error("invalidInput");
     return recurrenceFromForm({
       enabled: repeat,
       basis: current ? current.calendarBasis : basis,
@@ -87,15 +157,12 @@ export function CalendarPanel(props: {
       count: bound === "count" ? count : null,
       until:
         bound === "until"
-          ? { ...cursor, calendar: current ? current.calendarBasis : basis }
+          ? { calendar, year: pieces[0]!, month: pieces[1]!, day: pieces[2]! }
           : null,
       invalidDayPolicy: invalidDay,
-      startDate: {
-        ...cursor,
-        calendar: current ? current.calendarBasis : basis,
-      },
-      wall: allDay ? null : { hour, minute: 0, second: 0 },
-      timeZone: current ? current.zoneId : props.bootstrap.timeZone,
+      startDate: convertDate(cursor, calendar),
+      wall: allDay ? null : { hour, minute, second: 0 },
+      timeZone: zoneId,
       foldPolicy: fold,
       wkst: props.bootstrap.weekStart === 0 ? 7 : props.bootstrap.weekStart,
     });
@@ -108,8 +175,9 @@ export function CalendarPanel(props: {
       basis,
       allDay,
       localDate: convertDate({ ...cursor, calendar: display }, basis),
-      wall: allDay ? null : { hour, minute: 0, second: 0 },
-      zoneId: props.bootstrap.timeZone,
+      wall: allDay ? null : { hour, minute, second: 0 },
+      zoneId,
+      description,
       recurrence,
       foldPolicy: fold,
       reminders: remindersFromForm(),
@@ -145,6 +213,12 @@ export function CalendarPanel(props: {
     if (!current) return;
     const saved = await props.calendar.saveEvent(current.id, current.revision, {
       title,
+      description,
+      zoneId,
+      localDate: convertDate(cursor, current.calendarBasis),
+      allDay,
+      wall: allDay ? null : { hour, minute, second: 0 },
+      foldPolicy: fold,
       recurrenceSpec: draftSpec(),
     });
     await props.calendar.replaceRules(
@@ -236,7 +310,9 @@ export function CalendarPanel(props: {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          void create().catch(() => setStatus(t("calendar.failed")));
+          void (current ? saveSeries() : create()).catch(() =>
+            setStatus(t("calendar.failed")),
+          );
         }}
       >
         <label>
@@ -245,6 +321,22 @@ export function CalendarPanel(props: {
             className="field"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
+          />
+        </label>
+        <label>
+          {t("capture.details")}
+          <textarea
+            className="field"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </label>
+        <label>
+          {t("settings.zone")}
+          <input
+            className="field"
+            value={zoneId}
+            onChange={(event) => setZoneId(event.target.value)}
           />
         </label>
         <label>
@@ -406,6 +498,28 @@ export function CalendarPanel(props: {
           />
         </label>
         <label>
+          {t("calendar.minute")}
+          <input
+            className="field"
+            type="number"
+            min="0"
+            max="59"
+            value={minute}
+            onChange={(event) => setMinute(Number(event.target.value))}
+          />
+        </label>
+        {bound === "until" ? (
+          <label>
+            {t("calendar.untilDate")}
+            <input
+              className="field"
+              placeholder="YYYY-MM-DD"
+              value={untilText}
+              onChange={(event) => setUntilText(event.target.value)}
+            />
+          </label>
+        ) : null}
+        <label>
           {t("calendar.fold")}
           <select
             className="field"
@@ -435,15 +549,21 @@ export function CalendarPanel(props: {
           {t("calendar.important")}
         </label>
         <button className="btn primary" type="submit">
-          {t("calendar.create")}
+          {t(current ? "calendar.saveSeries" : "calendar.create")}
         </button>
         {current ? (
           <button
             className="btn"
             type="button"
-            onClick={() => void saveSeries()}
+            onClick={() => {
+              setSelected(null);
+              setTitle("");
+              setDescription("");
+              setRepeat(false);
+              setStatus("");
+            }}
           >
-            {t("calendar.saveSeries")}
+            {t("calendar.create")}
           </button>
         ) : null}
       </form>
@@ -457,14 +577,22 @@ export function CalendarPanel(props: {
             <button
               className="btn"
               type="button"
-              onClick={() => void editOccurrence(item.key)}
+              onClick={() =>
+                void editOccurrence(item.key).catch(() =>
+                  setStatus(t("calendar.failed")),
+                )
+              }
             >
               {t("calendar.editThis")}
             </button>
             <button
               className="btn"
               type="button"
-              onClick={() => void skipOccurrence(item.key)}
+              onClick={() =>
+                void skipOccurrence(item.key).catch(() =>
+                  setStatus(t("calendar.failed")),
+                )
+              }
             >
               {t("calendar.skipOccurrence")}
             </button>
@@ -479,9 +607,17 @@ export function CalendarPanel(props: {
           <button
             className="btn"
             type="button"
-            onClick={() =>
-              void props.calendar.deleteEvent(current.id).then(props.onChanged)
-            }
+            onClick={() => {
+              if (window.confirm(t("repair.confirmDelete")))
+                void props.calendar
+                  .deleteEvent(current.id)
+                  .then(() => {
+                    setSelected(null);
+                    setTitle("");
+                    return props.onChanged();
+                  })
+                  .catch(() => setStatus(t("calendar.failed")));
+            }}
           >
             {t("calendar.deleteSeries")}
           </button>

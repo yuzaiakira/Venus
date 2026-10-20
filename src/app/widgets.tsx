@@ -22,7 +22,12 @@ import { Icon, type IconName } from "./icons";
 
 const chrome: Record<
   string,
-  { icon: IconName; tone: "purple" | "blue" | "pink" | "orange"; title: MessageKey; sub: MessageKey }
+  {
+    icon: IconName;
+    tone: "purple" | "blue" | "pink" | "orange";
+    title: MessageKey;
+    sub: MessageKey;
+  }
 > = {
   today: {
     icon: "checkCircle",
@@ -124,6 +129,9 @@ export function WidgetBody(props: {
   onSearch: (query: string) => void;
   onWebSearch: (query: string) => void;
   onToggleTask: (id: string, revision: number, done: boolean) => void;
+  onOpenTask?: ((id: string) => void) | undefined;
+  onCreateTask?: (() => void) | undefined;
+  onMoveToday?: ((id: string, direction: -1 | 1) => void) | undefined;
   onOpenNote?: ((id: string) => void) | undefined;
   onStartTimer?: (() => void) | undefined;
   onPauseTimer?: (() => void) | undefined;
@@ -268,15 +276,15 @@ export function WidgetBody(props: {
           {focus.length === 0 ? (
             <li className="muted">{t("widget.none")}</li>
           ) : null}
-          {focus.map((task) => (
+          {focus.map((task, index) => (
             <li
               key={task.id}
               className={`task-row${task.status === "done" ? " done" : ""}`}
             >
               <input
                 type="checkbox"
-                checked={task.status === "done"}
                 aria-label={task.title}
+                checked={task.status === "done"}
                 onChange={(event) =>
                   props.onToggleTask(
                     task.id,
@@ -285,9 +293,35 @@ export function WidgetBody(props: {
                   )
                 }
               />
-              <label>
+              <button
+                className="task-title-link"
+                type="button"
+                onClick={() => props.onOpenTask?.(task.id)}
+              >
                 <bdi>{task.title}</bdi>
-              </label>
+              </button>
+              {task.today ? (
+                <div className="cluster">
+                  <button
+                    className="btn"
+                    type="button"
+                    aria-label={t("repair.up")}
+                    disabled={index === 0}
+                    onClick={() => props.onMoveToday?.(task.id, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    aria-label={t("repair.down")}
+                    disabled={index === focus.length - 1}
+                    onClick={() => props.onMoveToday?.(task.id, 1)}
+                  >
+                    ↓
+                  </button>
+                </div>
+              ) : null}
               <button
                 className="mini-complete btn"
                 type="button"
@@ -304,6 +338,13 @@ export function WidgetBody(props: {
             </li>
           ))}
         </ul>
+        <button
+          className="btn"
+          type="button"
+          onClick={() => props.onCreateTask?.()}
+        >
+          {t("command.task")}
+        </button>
       </div>
     );
   }
@@ -335,7 +376,9 @@ export function WidgetBody(props: {
               0,
               props.timer.durationMs - props.timer.elapsedBeforePauseMs,
             )
-          : null;
+          : props.timer?.status === "finished"
+            ? 0
+            : null;
     const displayMs = remainingMs ?? 25 * 60_000;
     const label = `${Math.floor(displayMs / 60000)
       .toString()
@@ -354,7 +397,9 @@ export function WidgetBody(props: {
           <p className="focus-time">{label}</p>
           <p className="muted">
             {props.timer
-              ? `${props.timer.cycleStep} · ${props.timer.status}`
+              ? props.timer.status === "finished"
+                ? t("timer.finished")
+                : `${props.timer.cycleStep} · ${props.timer.status}`
               : t("timer.none")}
           </p>
           <div className="focus-actions">
@@ -406,7 +451,9 @@ export function WidgetBody(props: {
     const quick = previewQuickLinks(props.bookmarks);
     return (
       <div className="quick-links">
-        {quick.length === 0 ? <p className="muted">{t("widget.none")}</p> : null}
+        {quick.length === 0 ? (
+          <p className="muted">{t("widget.none")}</p>
+        ) : null}
         {quick.map((bookmark) => (
           <a
             key={bookmark.id}
