@@ -16,7 +16,9 @@ jobs:
       - run: npm run build:chrome
       - run: npm run test:security
   browsers:
-    runs-on: ubuntu-latest
+    # Pin the browser runner so the Chromium sandbox policy is stable and
+    # captured by the preflight evidence.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -56,9 +58,22 @@ jobs:
         env:
           FIREFOX_BIN: ${{ steps.firefox.outputs.firefox-path }}
         run: npm run setup:browsers -- ${{ matrix.target }}
+      - name: Configure and verify Playwright Chromium sandbox
+        id: chrome-sandbox
+        if: ${{ always() && matrix.target == 'chrome' && steps.setup.outcome == 'success' && steps.display.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          P00_EVIDENCE_DIR: evidence/P00
+        run: |
+          set -euo pipefail
+          task_sandbox_helper="$(node scripts/verify-chromium-sandbox.mjs --helper-path)"
+          sudo chown root:root "$task_sandbox_helper"
+          sudo chmod 4755 "$task_sandbox_helper"
+          test "$(stat -c '%u:%g:%a' "$task_sandbox_helper")" = "0:0:4755"
+          xvfb-run npm run verify:chromium-sandbox
       - name: Run New Tab and Habit Tracker acceptance
         id: smoke
-        if: ${{ always() && steps.setup.outcome == 'success' && steps.display.outcome == 'success' }}
+        if: ${{ always() && steps.setup.outcome == 'success' && steps.display.outcome == 'success' && (matrix.target != 'chrome' || steps.chrome-sandbox.outcome == 'success') }}
         continue-on-error: true
         env:
           FIREFOX_BIN: ${{ steps.firefox.outputs.firefox-path }}
@@ -79,6 +94,7 @@ jobs:
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           FIREFOX_PROVISION_OUTCOME: ${{ steps.firefox.outcome }}
           CHROME_DEPS_OUTCOME: ${{ steps.chrome-deps.outcome }}
+          CHROME_SANDBOX_OUTCOME: ${{ steps.chrome-sandbox.outcome }}
           DISPLAY_OUTCOME: ${{ steps.display.outcome }}
           SETUP_OUTCOME: ${{ steps.setup.outcome }}
           SMOKE_OUTCOME: ${{ steps.smoke.outcome }}

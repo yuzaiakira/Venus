@@ -22,6 +22,10 @@ if (target === "chrome") {
     "Chromium runtime dependencies",
     process.env.CHROME_DEPS_OUTCOME,
   ]);
+  stages.splice(2, 0, [
+    "Playwright Chromium sandbox",
+    process.env.CHROME_SANDBOX_OUTCOME,
+  ]);
   stages.push(["Habit Reminder browser workflow", process.env.HABIT_OUTCOME]);
 }
 
@@ -36,7 +40,7 @@ function files(path) {
 
 const diagnostics = files(evidenceDir)
   .filter((path) =>
-    /(?:failure\.json|setup-.*\.log|browser\.json|geckodriver\.log)$/.test(
+    /(?:failure\.json|chromium-sandbox\.json|setup-.*\.log|browser\.json|geckodriver\.log)$/.test(
       path,
     ),
   )
@@ -61,6 +65,7 @@ const infrastructureStage = new Set([
   "Xvfb display server",
   "official Firefox provisioning",
   "Chromium runtime dependencies",
+  "Playwright Chromium sandbox",
   "browser provisioning",
 ]);
 const environmentBlocked =

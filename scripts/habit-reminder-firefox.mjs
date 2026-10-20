@@ -276,7 +276,7 @@ export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
       async () =>
         (
           await driver.findElements(
-            By.xpath("//h1[normalize-space()='پیگیری عادت']"),
+            By.xpath("//h1[normalize-space()='پیگیری عادت‌ها']"),
           )
         ).length > 0,
       10_000,

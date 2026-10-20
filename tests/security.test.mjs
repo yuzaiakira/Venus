@@ -19,6 +19,28 @@ test("P00 configuration has no host access, content injection or unsafe CSP", ()
     ),
   );
 });
+test("Chrome CI uses Playwright Chromium with a verified sandbox", () => {
+  const resolver = readFileSync("scripts/chromium-executable.mjs", "utf8");
+  assert.match(resolver, /chromium\.executablePath\(\)/);
+  assert.doesNotMatch(
+    resolver,
+    /google-chrome|\/usr\/bin\/chromium|CHROME_BIN/,
+  );
+
+  const preflight = readFileSync("scripts/verify-chromium-sandbox.mjs", "utf8");
+  assert.match(preflight, /chromiumSandbox:\s*true/);
+  assert.match(preflight, /mode !== "04755"/);
+  assert.match(preflight, /uid !== 0/);
+  assert.match(preflight, /gid !== 0/);
+  assert.doesNotMatch(preflight, /--no-sandbox/);
+
+  const workflow = readFileSync(".github/workflows/p00.yml", "utf8");
+  assert.match(workflow, /runs-on: ubuntu-24\.04/);
+  assert.match(workflow, /sudo chown root:root/);
+  assert.match(workflow, /sudo chmod 4755/);
+  assert.match(workflow, /npm run verify:chromium-sandbox/);
+  assert.doesNotMatch(workflow, /--no-sandbox/);
+});
 test("reviewed shell-quote override preserves fx-runner argument parsing", () => {
   const require = createRequire(import.meta.url);
   const runner = require("fx-runner/lib/run.js");

@@ -430,7 +430,7 @@ try {
   );
   await page.getByRole("button", { name: "پیگیری عادت", exact: true }).click();
   await page
-    .getByRole("heading", { name: "پیگیری عادت", exact: true })
+    .getByRole("heading", { name: "پیگیری عادت‌ها", exact: true })
     .waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.dir), "rtl");
   await page.setViewportSize({ width: 390, height: 844 });

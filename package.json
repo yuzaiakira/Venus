@@ -22,6 +22,7 @@
     "test:smoke:firefox": "node scripts/smoke-firefox.mjs",
     "test:smoke:chrome": "node scripts/smoke-chrome.mjs",
     "test:browser:habits": "node scripts/habit-reminder-browser-acceptance.mjs",
+    "verify:chromium-sandbox": "node scripts/verify-chromium-sandbox.mjs",
     "inspect:manifests": "node scripts/inspect-manifests.mjs",
     "test:security": "node --test tests/security.test.mjs",
     "test:manual": "web-ext run --source-dir .output/firefox-mv3",

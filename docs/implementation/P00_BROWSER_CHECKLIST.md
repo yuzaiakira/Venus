@@ -12,6 +12,22 @@ Run in fresh disposable profiles; record browser/OS/version, generated manifest,
 6. Alarms: schedule 60-second probe; restart before due and confirm rescheduling; shut down through due and confirm missed result on reopen. Trigger duplicate delivery and verify one durable claim. Chrome: terminate worker and verify reconstruction. Record potential at-most-once native attempt loss if process dies after claim; production retry semantics belong to P03.
 7. Reopen local DB and permission state; check FA/EN, keyboard focus, actionable error messages. Capture screens and browser logs without private data.
 
+## Chromium sandbox requirements for hosted CI
+
+Chrome acceptance runs only on the pinned GitHub-hosted `ubuntu-24.04` runner.
+It uses the exact Chromium revision installed by the repository's Playwright
+dependency in `.browser-cache`; system Chrome and Chromium are never fallbacks.
+After download, CI makes that revision's `chrome_sandbox` helper owned by
+`root:root` with mode `04755`, then launches a headed Chromium process under
+Xvfb with `chromiumSandbox: true` before loading Venus.
+
+The preflight writes `evidence/P00/chromium-sandbox.json` with the runner OS,
+LSM/AppArmor state, user-namespace settings, browser path, helper ownership and
+mode, and the actual sandboxed launch result. A failed preflight is classified
+as `ENVIRONMENT_BLOCKED`; the New Tab and Habit Reminder tests do not run and
+do not pass. The workflow never uses `--no-sandbox` or weakens Chromium's
+sandbox.
+
 ## Evidence status — 2026-10-09 continuation
 
 | Check | Observed status | Evidence / gap |
