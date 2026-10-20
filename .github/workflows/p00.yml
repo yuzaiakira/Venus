@@ -1,0 +1,32 @@
+name: P00
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm run lint && npm run typecheck && npm run unit && npm run test:integration && npm run format:check && npm run test:security
+  browsers:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [firefox, chrome]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npm run build:${{ matrix.target }}
+      - run: npm run setup:browsers -- ${{ matrix.target }}
+      - run: xvfb-run npm run test:smoke:${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p00-${{ matrix.target }}-evidence
+          path: evidence/P00

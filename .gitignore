@@ -1,0 +1,52 @@
+# Dependencies & package caches
+node_modules/
+.npm-cache/
+
+# WXT / extension build output
+.output/
+.wxt/
+.wxt-runner/
+dist/
+*.xpi
+*.crx
+*.tgz
+web-ext-artifacts/
+.webextrc
+
+# Local browser/driver downloads (setup:browsers)
+.browser-cache/
+
+# Test / tooling artifacts
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+*.tsbuildinfo
+.cache/
+stats.html
+*-stats.txt
+
+# Env / secrets (keep examples tracked if added later)
+.env
+.env.*
+!.env.example
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Isolated Firefox candidate output
+.output-beta/
+.output-release/
+.output-p04-fault/
+
+# Phase evidence artifacts (local only — do not publish)
+evidence/

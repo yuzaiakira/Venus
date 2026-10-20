@@ -1,0 +1,24 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #172034;
+  background: #f4f5fa;
+}
+main {
+  max-width: 52rem;
+  margin: 2rem auto;
+  padding: 1rem;
+}
+button {
+  padding: 0.65rem;
+  margin: 0.3rem;
+  cursor: pointer;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #4033a0;
+  outline-offset: 3px;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

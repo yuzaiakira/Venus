@@ -1,0 +1,15 @@
+{
+  "specVersion": "1.0",
+  "id": "example.personal-focus",
+  "version": "1.0.0",
+  "minHostVersion": "1.0.0",
+  "type": "declarative-widget",
+  "name": {"en": "My Focus Pack", "fa": "بسته تمرکز من"},
+  "description": {"en": "A checklist and safe counter", "fa": "چک‌لیست و شمارنده امن"},
+  "requestedCapabilities": ["selfStorage.readWrite"],
+  "preferredSize": "2x2",
+  "blocks": [
+    {"id": "tasks", "kind": "checklist", "title": {"en": "Focus items", "fa": "کارهای تمرکز"}, "items": [{"en": "Read", "fa": "مطالعه"}, {"en": "Plan", "fa": "برنامه‌ریزی"}]},
+    {"id": "completed", "kind": "counter", "title": {"en": "Completed", "fa": "انجام‌شده"}, "initial": 0, "minimum": 0, "maximum": 999, "step": 1}
+  ]
+}

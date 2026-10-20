@@ -1,0 +1,78 @@
+﻿task_id,phase,title,requirements,depends_on,acceptance_evidence,priority,status
+T-001,P00,Initialize reproducible WXT React TS workspace,"FR-001,FR-102",,Firefox and Chrome dev builds,P1,TODO
+T-002,P00,Pin tooling and create lint typecheck and test harness,FR-103,T-001,CI checks runnable,P1,TODO
+T-003,P00,Determine Firefox MV2 versus MV3 via empirical build matrix,"FR-001,FR-002",T-001,ADR-001 + manifest outputs,P1,TODO
+T-004,P00,Prototype Firefox local New Tab override,FR-001,T-001,Real Firefox tab test,P1,TODO
+T-005,P00,Prototype Firefox Home override and browser control,"FR-002,FR-006",T-004,Browser proof/fallback ADR-002,P0,TODO
+T-006,P00,Prototype Chrome Home and New Tab manifest behavior,"FR-002,FR-102",T-001,Generated Chrome manifest + smoke,P0,TODO
+T-007,P00,Test bookmarks alarms notifications permissions,"FR-041,FR-061",T-004,Revocation and restart evidence,P0,TODO
+T-008,P00,Define browser ports and capability matrix,"FR-002,FR-061",T-007,Adapters with test doubles,P1,TODO
+T-009,P00,Prepare privacy defaults and security checklist,"FR-096,FR-103",T-001,Permissions audit,P0,TODO
+T-010,P00,Dual browser automated smoke on CI,FR-102,T-002,Successful builds with report,P1,TODO
+T-011,P01,Implement semantic glass design tokens and primitive components,"FR-020,FR-025",T-010,A11y contrast/keyboard,P1,TODO
+T-012,P01,Create localized FA EN catalog with RTL LTR shell,"FR-023,FR-026",T-010,Screens both directions,P1,TODO
+T-013,P01,Set up Dexie database and preference bootstrap,"FR-012,FR-024",T-010,Persists restart,P0,TODO
+T-014,P01,Implement named layout profiles shared-content model,"FR-013,FR-014,FR-015",T-013,Create switch delete tests,P1,TODO
+T-015,P01,Widget registry and profile-bound instances,"FR-010,FR-011",T-013,Render and persist widgets,P1,TODO
+T-016,P01,Implement accessible drag drop resize grid,"FR-011,FR-016",T-015,Keyboard move tests,P1,TODO
+T-017,P01,Build New Tab Home common dashboard shell,"FR-001,FR-003",T-014,Home and New Tab smoke,P1,TODO
+T-018,P01,Theme wallpaper gradient glass controls,"FR-020,FR-021,FR-022",T-011,Light dark custom theme tests,P1,TODO
+T-019,P01,Settings modules search reset persistence,FR-024,T-013,Reset sections/validation,P1,TODO
+T-020,P01,First-run skippable onboarding,"FR-004,FR-005",T-017,Skip/reenter and permission refusal,P1,TODO
+T-021,P01,Command palette shell and shortcut fallback,"FR-070,FR-073",T-017,Keyboard focus tests,P1,TODO
+T-022,P01,Fault-tolerant widgets and responsive layout,"FR-017,FR-016",T-015,Crash and viewport tests,P1,TODO
+T-023,P02,Rich Text note schema and repositories,FR-050,T-013,Save safe JSON,P1,TODO
+T-024,P02,Notes editor autosave and optimistic concurrency,FR-051,T-023,Two-tab no lost updates,P1,TODO
+T-025,P02,Nested folders tags pins archive trash,"FR-052,FR-053",T-023,Recursive folder test,P1,TODO
+T-026,P02,Notes UI search and pinned widget,"FR-052,FR-053",T-023,Query and preview UI,P1,TODO
+T-027,P02,Task CRUD focus ranking dashboard widget,"FR-054,FR-055",T-013,Persist status and focus top 3,P1,TODO
+T-028,P02,Local bookmark folders groups and grid,"FR-060,FR-063",T-013,Create edit sort source badge,P1,TODO
+T-029,P02,Native bookmark adapter and permissions,"FR-061,FR-062",T-007,Grant revoke mutation confirm,P1,TODO
+T-030,P02,Portable browser bookmark snapshot model,FR-064,T-028,No native IDs in archive,P1,TODO
+T-031,P02,Quick Capture note task event entry,FR-056,T-023,No duplicate create,P1,TODO
+T-032,P02,Extend commands for notes tasks bookmarks profiles,"FR-071,FR-072",T-021,Palette keyboard and search,P1,TODO
+T-033,P02,Search engine settings and safe URL template,FR-065,T-028,Unsafe scheme rejected,P1,TODO
+T-034,P02,Full FA EN responsive productivity UX,"FR-050,FR-060",T-021,A11y and smoke,P1,TODO
+T-035,P03,Calendar date model and Jalali tests,"FR-030,FR-036",T-013,Leap years timezone golden tests,P1,TODO
+T-036,P03,Gregorian RRULE engine with test vectors,"FR-032,FR-033",T-033,Recurring occurrences correct,P1,TODO
+T-037,P03,Native Jalali recurrence engine,"FR-032,FR-033,FR-036",T-033,Farvardin and last Thu cases,P0,TODO
+T-038,P03,Event editor all-day timed timezone and agenda,FR-031,T-033,Calendar user journey,P1,TODO
+T-039,P03,Exceptions and series edit behavior,FR-035,T-034,THIS versus ENTIRE_SERIES,P1,TODO
+T-040,P03,Reminder rules data and alarm reconciliation engine,"FR-034,FR-041,FR-042",T-033,Cold-start idempotent alarms,P0,TODO
+T-041,P03,Notification center and native OS adapter,"FR-040,FR-043,FR-044",T-038,Due and dismissed tests,P1,TODO
+T-042,P03,Quiet hours severity and snooze states,"FR-043,FR-047",T-038,"Suppressed native, durable history",P1,TODO
+T-043,P03,Countdown durable timestamp state,FR-045,T-038,Tab closed + restart,P1,TODO
+T-044,P03,Pomodoro focus view and persisted cycles,FR-046,T-042,Pause/restart/cycle tests,P1,TODO
+T-045,P03,Document closed-browser limits in UI and help,FR-048,T-038,Correct disclaimer,P1,TODO
+T-046,P03,Jalali Gregorian RTL calendar UI tests,"FR-030,FR-031",T-036,Both calendars UI pass,P1,TODO
+T-047,P04,Versioned ZDPS manifest validator,"FR-080,FR-085",T-001,Strict schema and caps,P0,TODO
+T-048,P04,Safe seven block renderer registry,FR-081,T-045,All seven renderers isolated,P1,TODO
+T-049,P04,Plugin scoped data service with quotas,FR-084,T-045,Cross-namespace denied,P0,TODO
+T-050,P04,Builder form workflow with live safe preview,FR-081,T-046,Template to save roundtrip,P1,TODO
+T-051,P04,ZIP parser and plugin package import export,"FR-080,FR-085",T-045,Hostile ZIP cases fail,P0,TODO
+T-052,P04,Plugin manager update uninstall data options,FR-083,T-048,Keep vs delete data,P0,TODO
+T-053,P04,Safe Mode and runtime quarantine,"FR-085,FR-086",T-046,Crash does not break page,P1,TODO
+T-054,P04,Examples for seven blocks and i18n,"FR-081,FR-086",T-046,FA EN package roundtrip,P1,TODO
+T-055,P04,Adversarial no arbitrary code validation,"FR-082,FR-084",T-048,JS WASM SVG unsafe URLs denied,P1,TODO
+T-056,P04,Browser store policy plugin compatibility review,"FR-082,FR-103",T-045,No remote interpreter evidence,P1,TODO
+T-057,P05,Define backup manifest version contracts,"FR-090,FR-093",T-013,Validated file list hashes,P0,TODO
+T-058,P05,Manual full and selective backup UI,"FR-090,FR-095",T-056,Only user triggers backup,P1,TODO
+T-059,P05,Portable backup normalized IDs assets,"FR-090,FR-094",T-056,Cross-browser restore,P1,TODO
+T-060,P05,Bounded secure ZIP parsing and staging,FR-091,T-056,Corrupt archive no mutation,P1,TODO
+T-061,P05,Dry-run restore diff and conflict policies,"FR-091,FR-092",T-059,Merge choices explained,P0,TODO
+T-062,P05,Transactional import replace and rollback,"FR-091,FR-093",T-059,Injected failure recovery,P0,TODO
+T-063,P05,Explicit native bookmark snapshot materialization,FR-092,T-059,Separate opt-in + permissions,P1,TODO
+T-064,P05,Privacy wipe and redacted diagnostics,"FR-096,FR-097",T-059,Data erase never native BM,P1,TODO
+T-065,P05,Concurrency storage quota migrations test,FR-093,T-059,No silent data loss,P1,TODO
+T-066,P05,Offline e2e and adversarial security audit,"FR-082,FR-096",T-056,No remote code/data transfer,P0,TODO
+T-067,P05,Accessibility and performance integrated audit,FR-025,T-057,Benchmark results documented,P1,TODO
+T-068,P06,Real Firefox Home New Tab smoke across restart,"FR-001,FR-002",T-005,Manifest and user control proof,P1,TODO
+T-069,P06,Real Firefox permission lifecycle tests,"FR-041,FR-061",T-007,Optional denial cases pass,P1,TODO
+T-070,P06,Execute complete regression and adversarial suite,FR-103,T-063,P0 P1 zero,P1,TODO
+T-071,P06,Run cross-browser portable restore smoke,"FR-090,FR-102",T-058,Firefox export to Chrome dev,P0,TODO
+T-072,P06,Create FA EN user help and privacy statement,"FR-100,FR-101",T-066,Owner-reviewed docs,P1,TODO
+T-073,P06,Package limited Firefox beta and changelog,FR-101,T-068,Reproducible package / install notes,P1,TODO
+T-074,P06,Collect explicit opt-in tester feedback,FR-101,T-069,Manual feedback triage,P1,TODO
+T-075,P06,Correct P0 P1 and rerun tests,FR-103,T-071,Regression evidence,P1,TODO
+T-076,P06,Prepare public Firefox release checklist,FR-101,T-071,Owner sign off,P1,TODO
+T-077,P06,Document Chrome MV3 compatibility gates,FR-102,T-070,Build + non-release report,P1,TODO

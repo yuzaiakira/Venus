@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/Venus/schemas/zdps-1.0.json",
+  "title": "ZDPS v1 Declarative Plugin Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specVersion", "id", "version", "minHostVersion", "type", "name", "description", "requestedCapabilities", "blocks"],
+  "properties": {
+    "specVersion": {"const": "1.0"},
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*){1,5}$", "maxLength": 128},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$", "maxLength": 32},
+    "minHostVersion": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "type": {"const": "declarative-widget"},
+    "name": {"$ref": "#/$defs/localized"},
+    "description": {"$ref": "#/$defs/localized"},
+    "requestedCapabilities": {"type": "array", "uniqueItems": true, "maxItems": 3, "items": {"enum": ["clock.read", "selfStorage.readWrite", "safeNavigation.open"]}},
+    "blocks": {"type": "array", "minItems": 1, "maxItems": 10, "items": {"$ref": "#/$defs/block"}},
+    "preferredSize": {"enum": ["1x1", "2x1", "2x2"]}
+  },
+  "$defs": {
+    "localized": {"type": "object", "required": ["en", "fa"], "additionalProperties": false, "properties": {"en": {"type": "string", "minLength": 1, "maxLength": 120}, "fa": {"type": "string", "minLength": 1, "maxLength": 120}}},
+    "block": {"oneOf": [
+      {"type": "object", "additionalProperties": false, "required": ["id", "kind", "title", "text"], "properties": {"id": {"$ref": "#/$defs/id"}, "kind": {"const": "text-image"}, "title": {"$ref": "#/$defs/localized"}, "text": {"$ref": "#/$defs/localized"}, "assetPath": {"type": "string", "pattern": "^assets/[a-zA-Z0-9_-]+\\.(png|jpg|jpeg|webp)$", "maxLength": 128}}},
+      {"type": "object", "additionalProperties": false, "required": ["id", "kind", "title", "targetIso"], "properties": {"id": {"$ref": "#/$defs/id"}, "kind": {"const": "countdown"}, "title": {"$ref": "#/$defs/localized"}, "targetIso": {"type": "string", "format": "date-time"}}},
+      {"type": "object", "additionalProperties": false, "required": ["id", "kind", "title", "initial", "minimum", "maximum", "step"], "properties": {"id": {"$ref": "#/$defs/id"}, "kind": {"const": "counter"}, "title": {"$ref": "#/$defs/localized"}, "initial": {"type": "integer"}, "minimum": {"type": "integer"}, "maximum": {"type": "integer"}, "step": {"type": "integer", "minimum": 1, "maximum": 1000}}},
+      {"type": "object", "additionalProperties": false, "required": ["id", "kind", "title", "items"], "properties": {"id": {"$ref": "#/$defs/id"}, "kind": {"const": "checklist"}, "title": {"$ref": "#/$defs/localized"}, "items": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/localized"}}}},
+      {"type": "object", "additionalProperties": false, "required": ["id", "kind", "title", "links"], "properties": {"id": {"$ref": "#/$defs/id"}, "kind": {"const": "quick-links"}, "title": {"$ref": "#/$defs/localized"}, "links": {"type": "array", "maxItems": 25, "items": {"type": "object", "required": ["label", "url"], "additionalProperties": false, "properties": {"label": {"$ref": "#/$defs/localized"}, "url": {"type": "string", "maxLength": 2048, "pattern": "^https?://"}}}}}},
+      {"type": "object", "additionalProperties": false, "required": ["id", "kind", "title", "left", "right", "operation"], "properties": {"id": {"$ref": "#/$defs/id"}, "kind": {"const": "calculator"}, "title": {"$ref": "#/$defs/localized"}, "left": {"type": "number"}, "right": {"type": "number"}, "operation": {"enum": ["add", "subtract", "multiply", "divide"]}}},
+      {"type": "object", "additionalProperties": false, "required": ["id", "kind", "title", "current", "goal"], "properties": {"id": {"$ref": "#/$defs/id"}, "kind": {"const": "progress"}, "title": {"$ref": "#/$defs/localized"}, "current": {"type": "number", "minimum": 0}, "goal": {"type": "number", "exclusiveMinimum": 0}, "unit": {"type": "string", "maxLength": 20}}}
+    ]},
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$", "maxLength": 64}
+  }
+}

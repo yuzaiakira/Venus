@@ -1,0 +1,71 @@
+{
+  "name": "Venus-workspace",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "author": "Akira Yuzai",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wxt -b firefox --mv3",
+    "postinstall": "wxt prepare",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "lint": "eslint .",
+    "format:check": "prettier --check entrypoints src tests scripts *.ts *.json",
+    "unit": "vitest run tests/unit",
+    "build:firefox": "wxt build -b firefox --mv3",
+    "build:firefox:mv3": "wxt build -b firefox --mv3",
+    "build:firefox:mv2": "wxt build -b firefox --mv2",
+    "build:chrome": "wxt build -b chrome --mv3",
+    "test:smoke:firefox": "node scripts/smoke-firefox.mjs",
+    "test:smoke:chrome": "node scripts/smoke-chrome.mjs",
+    "inspect:manifests": "node scripts/inspect-manifests.mjs",
+    "test:security": "node --test tests/security.test.mjs",
+    "test:manual": "web-ext run --source-dir .output/firefox-mv3",
+    "dev:firefox": "wxt -b firefox --mv3",
+    "test:integration": "vitest run tests/integration",
+    "setup:browsers": "node scripts/setup-browsers.mjs",
+    "p00:verify": "node scripts/verify-p00.mjs",
+    "build:firefox:beta": "VENUS_FIREFOX_CHANNEL=beta wxt build -b firefox --mv3",
+    "build:firefox:release": "VENUS_FIREFOX_CHANNEL=release wxt build -b firefox --mv3",
+    "inspect:channels": "node scripts/inspect-channels.mjs",
+    "package:firefox:beta": "VENUS_FIREFOX_CHANNEL=beta node scripts/package-firefox-candidate.mjs",
+    "test:packaging": "node --test tests/packaging.test.mjs",
+    "test:smoke:identity": "node scripts/smoke-firefox-identity.mjs",
+    "preview:ui": "vite --config preview/vite.config.ts"
+  },
+  "dependencies": {
+    "@zip.js/zip.js": "2.23.0",
+    "dexie": "4.0.11",
+    "jalaali-js": "2.0.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "rrule-temporal": "2.2.8",
+    "temporal-polyfill": "1.0.5",
+    "zod": "3.24.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@playwright/test": "1.64.0",
+    "@types/node": "22.14.0",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "@wxt-dev/module-react": "1.1.3",
+    "eslint": "9.39.5",
+    "fake-indexeddb": "6.0.0",
+    "prettier": "3.5.3",
+    "selenium-webdriver": "4.31.0",
+    "typescript": "5.8.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "4.1.11",
+    "web-ext": "10.7.0",
+    "wxt": "0.21.4"
+  },
+  "overrides": {
+    "fx-runner": {
+      "shell-quote": "1.11.0"
+    }
+  }
+}
