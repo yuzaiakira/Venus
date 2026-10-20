@@ -74,6 +74,18 @@ export function SettingsScreen(props: {
 
   const locale = snapshot?.bootstrap.locale ?? "en";
   const t = (key: MessageKey) => translate(locale, key);
+  const widgetLabel = (type: (typeof widgetTypes)[number]) =>
+    t(
+      {
+        clock: "widget.clockTitle",
+        search: "widget.searchTitle",
+        bookmarks: "widget.linksTitle",
+        upcoming: "widget.calendarTitle",
+        today: "nav.tasks",
+        timer: "widget.focusTitle",
+        notes: "widget.notesTitle",
+      }[type] as MessageKey,
+    );
   if (!snapshot) {
     return (
       <main className="shell">
@@ -495,7 +507,7 @@ export function SettingsScreen(props: {
                       })
                     }
                   />
-                  {type}
+                  {widgetLabel(type)}
                 </label>
               ))}
               <button

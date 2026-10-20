@@ -126,7 +126,6 @@ export function WidgetBody(props: {
   timer: TimerRecord | null;
   now: Date;
   online: boolean;
-  onSearch: (query: string) => void;
   onWebSearch: (query: string) => void;
   onToggleTask: (id: string, revision: number, done: boolean) => void;
   onOpenTask?: ((id: string) => void) | undefined;
@@ -188,7 +187,7 @@ export function WidgetBody(props: {
           event.preventDefault();
           const data = new FormData(event.currentTarget);
           const query = String(data.get("q") ?? "");
-          props.onSearch(query);
+          props.onWebSearch(query);
         }}
       >
         <Icon name="search" />
@@ -200,18 +199,6 @@ export function WidgetBody(props: {
           placeholder={t("search.placeholder")}
         />
         <button className="btn" type="submit">
-          {t("search.local")}
-        </button>
-        <button
-          className="btn"
-          type="button"
-          onClick={(event) => {
-            const form = event.currentTarget.form;
-            if (!form) return;
-            const data = new FormData(form);
-            props.onWebSearch(String(data.get("q") ?? ""));
-          }}
-        >
           {t("search.submit")}
         </button>
         {props.online ? null : <p className="muted">{t("search.offline")}</p>}
