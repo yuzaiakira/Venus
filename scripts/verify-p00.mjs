@@ -36,6 +36,7 @@ const checks = [
   "test:security",
   "test:smoke:firefox",
   "test:smoke:chrome",
+  "test:browser:habits",
 ];
 const results = [];
 for (const check of checks) {

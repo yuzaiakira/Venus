@@ -7,7 +7,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
       - run: npm ci
       # Security checks inspect generated Firefox bundles, so build them in
       # this job before invoking the assertions.
@@ -24,11 +24,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
       - run: npm ci
       - run: npm run build:${{ matrix.target }}
       - run: npm run setup:browsers -- ${{ matrix.target }}
       - run: xvfb-run npm run test:smoke:${{ matrix.target }}
+      - if: matrix.target == 'chrome'
+        run: xvfb-run npm run test:browser:habits
       - uses: actions/upload-artifact@v4
         if: always()
         with:
