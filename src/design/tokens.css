@@ -834,6 +834,16 @@ body[data-scene="dawn"] .space-layer {
 .widget[data-hidden="true"] {
   opacity: 0.55;
 }
+.widget[draggable="true"] {
+  cursor: grab;
+  outline: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 3px;
+}
+.widget[draggable="true"]:active,
+.widget.is-dragging {
+  cursor: grabbing;
+  opacity: 0.45;
+}
 .widget-head {
   display: flex;
   align-items: center;
@@ -1729,6 +1739,24 @@ textarea.field {
 }
 .settings-screen section {
   scroll-margin-block-start: 1rem;
+}
+.settings-screen section {
+  padding: clamp(1.25rem, 2.2vw, 2rem);
+}
+.settings-screen section > h2 {
+  margin: 0 0 1.25rem;
+}
+.settings-screen section > label,
+.settings-screen section > form,
+.settings-screen section > .cluster {
+  display: grid;
+  gap: 0.55rem;
+  margin-block: 1rem;
+  line-height: 1.65;
+}
+.settings-screen section > form > label {
+  display: grid;
+  gap: 0.55rem;
 }
 .settings-screen .settings-layout {
   grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);

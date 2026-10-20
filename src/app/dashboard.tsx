@@ -1,12 +1,5 @@
 import { TaskDialog } from "./tasks";
-import {
-  useEffect,
-  useCallback,
-  useRef,
-  useMemo,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
+import { useEffect, useCallback, useRef, useMemo, useState } from "react";
 import type {
   BrowserBookmarkPort,
   Library,
@@ -19,6 +12,7 @@ import {
   formatClock,
   logicalColumns,
   movePlacement,
+  reorderPlacement,
   reflow,
   resizePlacement,
   searchTemplate,
@@ -34,7 +28,7 @@ import {
   permissionNoteKey,
   type PaletteCommand,
 } from "../domain/commands";
-import { canonicalHttpUrl, searchLibrary } from "../domain/productivity";
+import { canonicalHttpUrl } from "../domain/productivity";
 import { translate, type MessageKey } from "../locales/messages";
 import type { createCalendar } from "../application/calendar";
 import type { PluginPlatform } from "../application/plugins";
@@ -121,7 +115,7 @@ export function DashboardScreen(props: {
   const [captureKind, setCaptureKind] = useState<"note" | "task" | "event">(
     "note",
   );
-  const [localQuery, setLocalQuery] = useState("");
+  const [draggingWidgetId, setDraggingWidgetId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [palette, setPalette] = useState(false);
   const [query, setQuery] = useState("");
@@ -484,6 +478,24 @@ export function DashboardScreen(props: {
       setNotice(t("settings.error"));
     }
   }
+  async function persistWidgetDrop(widgetId: string, targetId: string) {
+    if (widgetId === targetId) return;
+    const current = widgets.map((item) => ({
+      id: item.id,
+      x: item.x,
+      y: item.y,
+      w: item.w,
+      h: item.h,
+    }));
+    try {
+      await props.workspace.savePlacements(
+        profile!.id,
+        reorderPlacement(current, widgetId, targetId),
+      );
+    } catch {
+      setNotice(t("settings.error"));
+    }
+  }
   async function runCommand(command: PaletteCommand | undefined) {
     if (!command) return;
     if (!command.available) {
@@ -735,54 +747,6 @@ export function DashboardScreen(props: {
                 onChanged={reload}
               />
             ) : null}
-            {localQuery ? (
-              <section className="glass" aria-label={t("search.results")}>
-                <h2>{t("search.results")}</h2>
-                <p className="muted">{t("search.local")}</p>
-                <ul>
-                  {searchLibrary(
-                    {
-                      notes: library?.notes ?? [],
-                      tasks: library?.tasks ?? [],
-                      bookmarks: library?.bookmarks ?? [],
-                      commands: commands.map((command) => ({
-                        id: command.id,
-                        label: command.label,
-                      })),
-                    },
-                    localQuery,
-                  )
-                    .slice(0, 20)
-                    .map((hit) => (
-                      <li key={`${hit.kind}:${hit.id}`}>
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => {
-                            if (hit.kind === "note") {
-                              setSelectedNoteId(hit.id);
-                              setView("notes");
-                            }
-                            if (hit.kind === "task") {
-                              setSelectedTaskId(hit.id);
-                              setView("tasks");
-                            }
-                            if (hit.kind === "bookmark") setView("bookmarks");
-                            if (hit.kind === "command")
-                              void runCommand(
-                                commands.find((item) => item.id === hit.id),
-                              );
-                            setLocalQuery("");
-                          }}
-                        >
-                          <bdi>{hit.title}</bdi>
-                        </button>
-                        <span className="muted">{hit.kind}</span>
-                      </li>
-                    ))}
-                </ul>
-              </section>
-            ) : null}
             {view === "settings" ? (
               <SettingsScreen
                 workspace={props.workspace}
@@ -832,7 +796,23 @@ export function DashboardScreen(props: {
                       onSubmit={(event) => {
                         event.preventDefault();
                         const data = new FormData(event.currentTarget);
-                        setLocalQuery(String(data.get("q") ?? ""));
+                        const value = String(data.get("q") ?? "");
+                        if (!online) {
+                          setNotice(t("search.offline"));
+                          return;
+                        }
+                        try {
+                          window.open(
+                            webSearchUrl(
+                              searchTemplate(snapshot.bootstrap),
+                              value,
+                            ),
+                            "_blank",
+                            "noopener,noreferrer",
+                          );
+                        } catch {
+                          setNotice(t("search.invalid"));
+                        }
                       }}
                     >
                       <Icon name="search" />
@@ -842,7 +822,6 @@ export function DashboardScreen(props: {
                         type="search"
                         aria-label={t("search.label")}
                         placeholder={t("search.placeholder")}
-                        defaultValue={localQuery}
                       />
                       <kbd>Ctrl K</kbd>
                     </form>
@@ -929,8 +908,31 @@ export function DashboardScreen(props: {
                     return (
                       <article
                         key={widget.id}
-                        className="card-glass widget"
+                        className={`card-glass widget${draggingWidgetId === widget.id ? " is-dragging" : ""}`}
                         data-hidden={widget.visible ? "false" : "true"}
+                        draggable={editing}
+                        onDragStart={(event) => {
+                          if (!editing) return;
+                          event.dataTransfer.setData(
+                            "text/venus-widget",
+                            widget.id,
+                          );
+                          event.dataTransfer.effectAllowed = "move";
+                          setDraggingWidgetId(widget.id);
+                        }}
+                        onDragEnd={() => setDraggingWidgetId(null)}
+                        onDragOver={(event) => {
+                          if (editing && draggingWidgetId !== widget.id)
+                            event.preventDefault();
+                        }}
+                        onDrop={(event) => {
+                          if (!editing) return;
+                          event.preventDefault();
+                          const id =
+                            event.dataTransfer.getData("text/venus-widget");
+                          if (id) void persistWidgetDrop(id, widget.id);
+                          setDraggingWidgetId(null);
+                        }}
                         style={{
                           gridColumn: `${box.x + 1} / span ${box.w}`,
                           gridRow: `${box.y + 1} / span ${box.h}`,
@@ -990,7 +992,6 @@ export function DashboardScreen(props: {
                                 bookmarks={library?.bookmarks ?? []}
                                 events={events}
                                 timer={activeTimer}
-                                onSearch={(value) => setLocalQuery(value)}
                                 onWebSearch={(value) => {
                                   if (!online) {
                                     setNotice(t("search.offline"));
@@ -1134,23 +1135,6 @@ export function DashboardScreen(props: {
                             <button
                               className="btn"
                               type="button"
-                              onPointerDown={(event) =>
-                                startDrag(
-                                  event,
-                                  widget,
-                                  widgets,
-                                  props.workspace,
-                                  profile.id,
-                                  setNotice,
-                                  t("settings.error"),
-                                )
-                              }
-                            >
-                              {t("widget.move")}
-                            </button>
-                            <button
-                              className="btn"
-                              type="button"
                               onClick={() =>
                                 void props.workspace.setWidget(
                                   widget.id,
@@ -1193,7 +1177,7 @@ export function DashboardScreen(props: {
                         <option value="">{t("edit.add")}</option>
                         {widgetTypes.map((type) => (
                           <option key={type} value={type}>
-                            {type}
+                            {widgetLabel(type, t)}
                           </option>
                         ))}
                       </select>
@@ -1428,44 +1412,17 @@ export function DashboardScreen(props: {
   );
 }
 
-function startDrag(
-  event: ReactPointerEvent<HTMLButtonElement>,
-  widget: WidgetRecord,
-  widgets: WidgetRecord[],
-  workspace: Workspace,
-  profileId: string,
-  setNotice: (value: string) => void,
-  errorText: string,
-) {
-  const startX = event.clientX;
-  const startY = event.clientY;
-  const move = (ev: PointerEvent) => {
-    void ev;
+function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
+  const labels: Record<WidgetType, MessageKey> = {
+    clock: "widget.clockTitle",
+    search: "widget.searchTitle",
+    bookmarks: "widget.linksTitle",
+    upcoming: "widget.calendarTitle",
+    today: "nav.tasks",
+    timer: "widget.focusTitle",
+    notes: "widget.notesTitle",
   };
-  const up = async (ev: PointerEvent) => {
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-    const dx = Math.round((ev.clientX - startX) / 96);
-    const dy = Math.round((ev.clientY - startY) / 96);
-    if (dx === 0 && dy === 0) return;
-    const current = widgets.map((item) => ({
-      id: item.id,
-      x: item.x,
-      y: item.y,
-      w: item.w,
-      h: item.h,
-    }));
-    try {
-      await workspace.savePlacements(
-        profileId,
-        movePlacement(current, widget.id, dx, dy),
-      );
-    } catch {
-      setNotice(errorText);
-    }
-  };
-  window.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", up);
+  return t(labels[type]);
 }
 
 function Onboarding(props: {

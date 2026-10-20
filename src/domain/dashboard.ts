@@ -332,6 +332,27 @@ export function movePlacement(
   if (!storedFit(next)) throw new Error("invalidInput");
   return next;
 }
+/**
+ * Move a widget by dropping it on another widget.  Reflowing the ordered
+ * layout makes this work for widgets of different sizes without ever storing
+ * overlapping cells.
+ */
+export function reorderPlacement(
+  items: Placement[],
+  id: string,
+  beforeId: string,
+) {
+  if (id === beforeId) return items;
+  const moving = items.find((item) => item.id === id);
+  const target = items.findIndex((item) => item.id === beforeId);
+  if (!moving || target < 0) throw new Error("invalidInput");
+  const ordered = [...items]
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .filter((item) => item.id !== id);
+  const index = ordered.findIndex((item) => item.id === beforeId);
+  ordered.splice(index, 0, moving);
+  return reflow(ordered, logicalColumns);
+}
 export function resizePlacement(
   items: Placement[],
   id: string,
