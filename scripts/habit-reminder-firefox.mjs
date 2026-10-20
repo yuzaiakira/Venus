@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { Select } from "selenium-webdriver";
 
 function readHabitData(driver, title) {
   return driver.executeAsyncScript(
@@ -202,15 +203,84 @@ export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
       Buffer.from(await driver.takeScreenshot(), "base64"),
     );
 
+    const notificationToggle = await driver.findElement(
+      By.css('[aria-label="Notifications"]'),
+    );
+    if ((await notificationToggle.getAttribute("aria-expanded")) === "true") {
+      await notificationToggle.click();
+      await driver.wait(
+        async () =>
+          (
+            await driver.findElements(
+              By.xpath(
+                "//section[contains(@class, 'menu')][.//h2[normalize-space()='Notifications']]",
+              ),
+            )
+          ).length === 0,
+        10_000,
+        "Firefox Notification Center did not close before opening Settings",
+      );
+    }
     await driver.findElement(By.css('[aria-label="Settings"]')).click();
-    const language = await driver.findElement(By.css("select"));
-    await setReactInput(driver, language, "fa");
     await driver.wait(
       async () =>
-        (await driver.executeScript("return document.documentElement.dir")) ===
-        "rtl",
+        (
+          await driver.findElements(
+            By.xpath(
+              "//main[contains(@class, 'settings-screen')]//h1[normalize-space()='Settings']",
+            ),
+          )
+        ).length > 0,
+      10_000,
+      "Firefox did not open Settings",
+    );
+    const language = await driver.findElement(
+      By.xpath(
+        "//main[contains(@class, 'settings-screen')]//label[contains(normalize-space(), 'Language')]//select",
+      ),
+    );
+    await new Select(language).selectByValue("fa");
+    await driver.wait(
+      async () =>
+        (await driver.executeScript(
+          "return document.documentElement.dir === 'rtl' && document.documentElement.lang === 'fa'",
+        )) === true,
       10_000,
       "Firefox did not switch the Habit UI to RTL",
+    );
+    await driver.navigate().refresh();
+    await driver.wait(
+      async () =>
+        (await driver.executeScript(
+          "return document.documentElement.dir === 'rtl' && document.documentElement.lang === 'fa'",
+        )) === true,
+      10_000,
+      "Firefox did not persist the Persian locale after reload",
+    );
+    await driver.findElement(By.css('[aria-label="تنظیمات"]')).click();
+    const persistedLanguage = await driver.findElement(
+      By.xpath(
+        "//main[contains(@class, 'settings-screen')]//label[contains(normalize-space(), 'زبان')]//select",
+      ),
+    );
+    assert.equal(
+      await driver.executeScript(
+        "return arguments[0].value",
+        persistedLanguage,
+      ),
+      "fa",
+      "Firefox did not save the Persian locale",
+    );
+    await driver.findElement(By.css('[aria-label="پیگیری عادت"]')).click();
+    await driver.wait(
+      async () =>
+        (
+          await driver.findElements(
+            By.xpath("//h1[normalize-space()='پیگیری عادت']"),
+          )
+        ).length > 0,
+      10_000,
+      "Firefox did not render Habit tracker in Persian",
     );
     await driver.manage().window().setRect({ width: 390, height: 844 });
     assert.equal(
@@ -220,7 +290,7 @@ export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
       true,
       "Firefox Habit UI overflows the mobile viewport",
     );
-    evidence.checks.push("persian-rtl-responsive");
+    evidence.checks.push("persian-rtl-persisted-responsive");
     await writeFile(
       join(evidenceDir, "habit-reminder-firefox-fa.png"),
       Buffer.from(await driver.takeScreenshot(), "base64"),

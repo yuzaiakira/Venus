@@ -1,6 +1,6 @@
 /* global chrome, document, indexedDB, window */
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -20,7 +20,7 @@ if (!existsSync(join(extension, "manifest.json")))
   throw new Error("Habit browser acceptance: Chrome build missing");
 if (!executablePath)
   throw new Error(
-    "Habit browser acceptance: no sandbox-capable Chrome executable is available",
+    "Habit browser acceptance: Playwright Chromium is missing. Run npm run setup:browsers -- chrome.",
   );
 
 const profile = await mkdtemp(join(tmpdir(), "venus-habit-browser-"));
@@ -28,6 +28,19 @@ const evidence = {
   browser: null,
   executablePath,
   profile: "disposable",
+  stages: {
+    browserProcess: "not-started",
+    extensionLoaded: "not-loaded",
+    backgroundServiceWorker: "not-active",
+    newTabOverride: "not-registered",
+    dashboard: "not-rendered",
+  },
+  extension: {
+    manifest: JSON.parse(
+      readFileSync(join(extension, "manifest.json"), "utf8"),
+    ),
+    serviceWorkers: [],
+  },
   permission: "NOT_REQUESTED",
   osNotificationDisplay: "NOT_VERIFIED",
   checks: [],
@@ -79,6 +92,41 @@ async function readHabitData(page, title) {
 }
 
 let context;
+let page;
+
+async function collectExtensionEvidence() {
+  if (!context) return;
+  const workers = context.serviceWorkers();
+  evidence.stages.backgroundServiceWorker =
+    workers.length > 0 ? "active" : "not-active";
+  evidence.extension.serviceWorkers = await Promise.all(
+    workers.map(async (worker) => ({
+      url: worker.url(),
+      runtime: await worker
+        .evaluate(() => ({
+          id: chrome.runtime.id,
+          manifest: chrome.runtime.getManifest(),
+        }))
+        .catch((error) => ({ error: String(error) })),
+    })),
+  );
+}
+
+async function collectPageEvidence(stage) {
+  if (!page) return;
+  evidence.page = {
+    stage,
+    url: page.url(),
+    title: await page.title().catch((error) => `ERROR: ${error}`),
+    runtime: await page
+      .evaluate(() => ({
+        id: chrome.runtime?.id ?? null,
+        manifest: chrome.runtime?.getManifest?.() ?? null,
+      }))
+      .catch((error) => ({ error: String(error) })),
+  };
+}
+
 try {
   context = await chromium.launchPersistentContext(profile, {
     executablePath,
@@ -93,6 +141,7 @@ try {
       `--load-extension=${extension}`,
     ],
   });
+  evidence.stages.browserProcess = "started";
   await context.tracing.start({
     screenshots: true,
     snapshots: true,
@@ -100,18 +149,49 @@ try {
   });
   await context.setOffline(true);
   evidence.browser = context.browser().version();
-  const page = await context.newPage();
+  page = await context.newPage();
   page.on("console", (message) => {
     if (message.type() === "error") evidence.consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => evidence.consoleErrors.push(String(error)));
+  const serviceWorkerReady =
+    context.serviceWorkers().length > 0
+      ? Promise.resolve()
+      : context
+          .waitForEvent("serviceworker", { timeout: 5_000 })
+          .catch(() => undefined);
   await page.goto("chrome://newtab/");
+  await serviceWorkerReady;
+  await collectExtensionEvidence();
+  await collectPageEvidence("newtab-loaded");
+
+  const extensionId = evidence.extension.serviceWorkers
+    .map((worker) => worker.runtime?.id)
+    .find(Boolean);
+  if (!extensionId)
+    throw new Error(
+      "Habit browser acceptance: extension background service worker did not expose an ID",
+    );
+  if (evidence.page.runtime?.id !== extensionId)
+    throw new Error(
+      "Habit browser acceptance: Chrome New Tab did not run Venus extension code",
+    );
+  evidence.stages.extensionLoaded = "loaded";
+  if (
+    evidence.extension.manifest.chrome_url_overrides?.newtab !== "newtab.html"
+  )
+    throw new Error(
+      "Habit browser acceptance: loaded extension does not register Venus as New Tab",
+    );
+  evidence.stages.newTabOverride = "registered";
+
   await page
     .getByRole("navigation", { name: "Dashboard", exact: true })
     .waitFor({ timeout: 15_000 });
   await page
     .getByRole("button", { name: "Habit tracker", exact: true })
     .waitFor({ timeout: 15_000 });
+  evidence.stages.dashboard = "rendered";
   await page.getByRole("button", { name: "Skip setup", exact: true }).click();
   await page.locator(".dialog-backdrop").waitFor({ state: "hidden" });
   await page
@@ -270,6 +350,12 @@ try {
   await page.screenshot({ path: join(evidenceDir, "habit-reminder-en.png") });
 
   await page
+    .getByRole("button", { name: "Notifications", exact: true })
+    .click();
+  await page
+    .getByRole("heading", { name: "Notifications", exact: true })
+    .waitFor({ state: "hidden" });
+  await page
     .getByRole("button", { name: "Habit tracker", exact: true })
     .click();
   const completedRow = page.locator("li", { hasText: savedTitle });
@@ -325,11 +411,26 @@ try {
 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByLabel("Language").selectOption("fa");
+  await page.waitForFunction(
+    () =>
+      document.documentElement.dir === "rtl" &&
+      document.documentElement.lang === "fa",
+  );
+  await page.reload();
+  await page.waitForFunction(
+    () =>
+      document.documentElement.dir === "rtl" &&
+      document.documentElement.lang === "fa",
+  );
+  await page.getByRole("button", { name: "تنظیمات", exact: true }).click();
+  assert.equal(
+    await page.getByLabel("زبان").inputValue(),
+    "fa",
+    "Persian locale did not persist after reload",
+  );
+  await page.getByRole("button", { name: "پیگیری عادت", exact: true }).click();
   await page
-    .getByRole("button", { name: "پیگیری عادت‌ها", exact: true })
-    .click();
-  await page
-    .getByRole("heading", { name: "پیگیری عادت‌ها", exact: true })
+    .getByRole("heading", { name: "پیگیری عادت", exact: true })
     .waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.dir), "rtl");
   await page.setViewportSize({ width: 390, height: 844 });
@@ -349,9 +450,11 @@ try {
   );
   console.log("Habit Reminder Chrome browser acceptance passed");
 } catch (error) {
+  await collectExtensionEvidence();
+  await collectPageEvidence("failure");
   evidence.error =
     error instanceof Error ? (error.stack ?? error.message) : String(error);
-  const failedPage = context?.pages().at(-1);
+  const failedPage = page ?? context?.pages().at(-1);
   await failedPage
     ?.screenshot({ path: join(evidenceDir, "habit-reminder-failure.png") })
     .catch(() => {});

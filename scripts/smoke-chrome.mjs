@@ -12,7 +12,7 @@ const { chromium } = await import("@playwright/test");
 const executablePath = chromiumExecutable(chromium);
 if (!executablePath || !existsSync(executablePath))
   throw new Error(
-    "Chrome smoke FAILED: no CHROME_BIN/browser executable. No pass or skip.",
+    "Chrome smoke FAILED: Playwright Chromium is missing. Run npm run setup:browsers -- chrome.",
   );
 if (!existsSync(".output/chrome-mv3/manifest.json"))
   throw new Error("Chrome smoke FAILED: build missing");
@@ -35,6 +35,13 @@ const evidence = {
   executablePath,
   sandbox: true,
   launchSettings,
+  stages: {
+    browserProcess: "not-started",
+    extensionLoaded: "not-loaded",
+    backgroundServiceWorker: "not-active",
+    newTabOverride: "not-registered",
+    dashboard: "not-rendered",
+  },
   extension: {
     directory: extension,
     manifest: JSON.parse(
@@ -51,6 +58,8 @@ let page;
 async function collectExtensionEvidence() {
   if (!context) return;
   const workers = context.serviceWorkers();
+  evidence.stages.backgroundServiceWorker =
+    workers.length > 0 ? "active" : "not-active";
   evidence.extension.serviceWorkers = await Promise.all(
     workers.map(async (worker) => ({
       url: worker.url(),
@@ -104,6 +113,7 @@ const launch = async () => {
 try {
   await mkdir(evidenceDir, { recursive: true });
   context = await launch();
+  evidence.stages.browserProcess = "started";
   await context.tracing.start({
     screenshots: true,
     snapshots: true,
@@ -115,33 +125,49 @@ try {
     if (message.type() === "error") evidence.consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => evidence.pageExceptions.push(String(error)));
-  if (context.serviceWorkers().length === 0)
-    await context
-      .waitForEvent("serviceworker", { timeout: 5_000 })
-      .catch(() => undefined);
-  await collectExtensionEvidence();
+  const serviceWorkerReady =
+    context.serviceWorkers().length > 0
+      ? Promise.resolve()
+      : context
+          .waitForEvent("serviceworker", { timeout: 5_000 })
+          .catch(() => undefined);
 
   // This must be Chrome's New Tab URL. Opening an extension URL directly does
   // not prove that the extension replaced the browser's New Tab page.
   await page.goto("chrome://newtab/");
+  await serviceWorkerReady;
+  await collectExtensionEvidence();
+  await collectPageEvidence("newtab-loaded");
+
+  const extensionId = evidence.extension.serviceWorkers
+    .map((worker) => worker.runtime?.id)
+    .find(Boolean);
+  if (!extensionId)
+    throw new Error(
+      "Chrome extension background service worker did not expose an ID",
+    );
+  if (evidence.page.runtime?.id !== extensionId)
+    throw new Error(
+      "Chrome New Tab content did not run in the loaded Venus extension",
+    );
+  evidence.stages.extensionLoaded = "loaded";
+  if (
+    evidence.extension.manifest.chrome_url_overrides?.newtab !== "newtab.html"
+  )
+    throw new Error(
+      "Loaded Chrome extension does not register Venus as New Tab",
+    );
+  evidence.stages.newTabOverride = "registered";
+
   await page
     .getByRole("navigation", { name: "Dashboard", exact: true })
     .waitFor({ timeout: 15_000 });
   await page
     .getByRole("button", { name: "Habit tracker", exact: true })
     .waitFor({ timeout: 15_000 });
+  evidence.stages.dashboard = "rendered";
   await collectPageEvidence("success");
   await page.screenshot({ path: join(evidenceDir, "chrome-newtab.png") });
-
-  const extensionId = evidence.extension.serviceWorkers
-    .map((worker) => worker.runtime?.id)
-    .find(Boolean);
-  if (!extensionId)
-    throw new Error("Chrome extension service worker did not expose an ID");
-  if (evidence.page.runtime?.id !== extensionId)
-    throw new Error(
-      "Chrome New Tab content did not run in the loaded Venus extension",
-    );
 
   const optionsUrl = await page.evaluate(() =>
     globalThis.chrome.runtime.getURL("options.html"),

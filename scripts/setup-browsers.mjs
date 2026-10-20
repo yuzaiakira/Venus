@@ -46,8 +46,35 @@ if (target === "all" || target === "chrome") {
     { ...process.env, PLAYWRIGHT_BROWSERS_PATH: cache },
     3,
   );
-  setup.chromium = { installed: result.ok };
-  if (!result.ok) failed = true;
+  if (!result.ok) {
+    setup.chromium = { installed: false };
+    failed = true;
+  } else {
+    // Resolve through the same @playwright/test package imported by the
+    // acceptance scripts. This catches cache/version mismatches before a
+    // system browser can be selected as an accidental fallback.
+    const { chromium } = await import("@playwright/test");
+    const executablePath = chromium.executablePath();
+    if (!existsSync(executablePath)) {
+      console.error(
+        `chromium: Playwright installed successfully but its expected executable is missing: ${executablePath}`,
+      );
+      setup.chromium = {
+        installed: false,
+        expectedExecutablePath: executablePath,
+        error: "Playwright Chromium cache/version mismatch",
+      };
+      failed = true;
+    } else {
+      const version = run("playwright-chromium", executablePath, ["--version"]);
+      setup.chromium = {
+        installed: version.ok,
+        executablePath,
+        version: version.stdout.trim(),
+      };
+      if (!version.ok) failed = true;
+    }
+  }
 }
 
 if (target === "all" || target === "firefox") {
