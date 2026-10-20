@@ -139,6 +139,9 @@ db.version(6)
     }
   });
 db.version(7).stores({ habits: "id,updatedAt,frequency" });
+// v8 adds an index for habit-owned rules; existing event/task rules retain
+// their IDs and owner fields unchanged.
+db.version(8).stores({ reminderRules: "id, eventId, taskId, habitId" });
 export const productivityDb: ProductivityDatabase = {
   notes: db.notes,
   noteDrafts: db.noteDrafts,
@@ -163,6 +166,7 @@ export const productivityDb: ProductivityDatabase = {
     ),
 };
 export const calendarDb: CalendarDatabase = {
+  habits: db.habits,
   events: db.events,
   reminderRules: db.reminderRules,
   notificationOccurrences: db.notificationOccurrences,
@@ -177,6 +181,7 @@ export const calendarDb: CalendarDatabase = {
         db.notificationOccurrences,
         db.timerSessions,
         db.quietHours,
+        db.habits,
       ],
       work,
     ),
