@@ -44,7 +44,7 @@ describe("P03 scheduler", () => {
     });
     legacy.close();
     await db.open();
-    expect(db.verno).toBe(6);
+    expect(db.verno).toBe(7);
     expect(
       await db.notes.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
     ).toMatchObject({

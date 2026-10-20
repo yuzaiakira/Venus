@@ -15,6 +15,8 @@ import {
   type LocalBookmarkRecord,
   type NoteRecord,
   type TaskRecord,
+  type HabitRecord,
+  habitStreak,
 } from "../domain/productivity";
 import type { EventRecord, TimerRecord } from "../domain/time/records";
 import { translate, type MessageKey } from "../locales/messages";
@@ -83,6 +85,12 @@ const chrome: Record<
     title: "widget.captureTitle",
     sub: "widget.captureSub",
   },
+  habits: {
+    icon: "checkCircle",
+    tone: "purple",
+    title: "widget.habitsTitle",
+    sub: "widget.habitsSub",
+  },
 };
 
 export function WidgetChrome(props: {
@@ -133,6 +141,7 @@ export function WidgetBody(props: {
   shared: SharedItem[];
   notes: NoteRecord[];
   tasks: TaskRecord[];
+  habits: HabitRecord[];
   bookmarks: LocalBookmarkRecord[];
   events: EventRecord[];
   timer: TimerRecord | null;
@@ -140,6 +149,9 @@ export function WidgetBody(props: {
   online: boolean;
   onWebSearch: (query: string) => void;
   onCapture?: ((kind: "note" | "task" | "event") => void) | undefined;
+  onToggleHabit?:
+    | ((id: string, revision: number, date: string) => void)
+    | undefined;
   onToggleTask: (id: string, revision: number, done: boolean) => void;
   onOpenTask?: ((id: string) => void) | undefined;
   onCreateTask?: (() => void) | undefined;
@@ -289,6 +301,26 @@ export function WidgetBody(props: {
           </button>
         </div>
       </div>
+    );
+  }
+  if (props.widget.widgetType === "habits") {
+    const day = props.now.toISOString().slice(0, 10);
+    return (
+      <ul className="task-list">
+        {props.habits.slice(0, 4).map((h) => (
+          <li key={h.id}>
+            <button
+              className="btn"
+              onClick={() => props.onToggleHabit?.(h.id, h.revision, day)}
+            >
+              {h.checkIns.includes(day) ? "✓" : "○"}
+            </button>{" "}
+            <bdi>{h.title}</bdi>{" "}
+            <small className="muted">{habitStreak(h, day)}</small>
+          </li>
+        ))}
+        {!props.habits.length ? <li className="muted">No habits yet</li> : null}
+      </ul>
     );
   }
   if (props.widget.widgetType === "notes") {

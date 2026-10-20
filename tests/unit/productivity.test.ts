@@ -11,6 +11,9 @@ import {
   previewNotes,
   previewQuickLinks,
   previewTodayTasks,
+  habitBestStreak,
+  habitState,
+  habitStreak,
   safeLink,
   searchLibrary,
   snapshotFromTree,
@@ -26,6 +29,19 @@ import {
   type ProductivityDatabase,
   type RowTable,
 } from "../../src/application/productivity";
+
+const habit = (
+  checkIns: string[],
+  frequency: "daily" | "weekly" = "daily",
+) => ({
+  id: "11111111-1111-4111-8111-111111111111",
+  title: "Walk",
+  frequency,
+  checkIns,
+  revision: 1,
+  createdAt: "2026-01-01",
+  updatedAt: "2026-01-01",
+});
 import { WorkspaceError } from "../../src/domain/dashboard";
 
 function table<T extends { id: string }>() {
@@ -65,6 +81,7 @@ function database(): ProductivityDatabase {
     tasks,
     localBookmarks,
     bookmarkSnapshots,
+    habits: table(),
     async transaction(_mode, _tables, work) {
       return work();
     },
@@ -72,6 +89,21 @@ function database(): ProductivityDatabase {
 }
 
 describe("P02 productivity domain", () => {
+  it("calculates daily and weekly streaks without counting missed or future periods", () => {
+    expect(
+      habitStreak(
+        habit(["2026-12-30", "2026-12-31", "2027-01-01"]),
+        "2027-01-01",
+      ),
+    ).toBe(3);
+    expect(
+      habitBestStreak(habit(["2026-12-30", "2026-12-31", "2027-01-02"])),
+    ).toBe(2);
+    expect(
+      habitStreak(habit(["2026-03-02", "2026-03-09"], "weekly"), "2026-03-10"),
+    ).toBe(2);
+    expect(habitState(habit([]), "2999-01-01")).toBe("upcoming");
+  });
   it("stores pasted markup as text and rejects unsafe links", () => {
     const text = pastedPlainText(
       '<img src="x" onerror="globalThis.pwned=1"><script>alert(1)</script>hello',

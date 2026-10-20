@@ -30,7 +30,7 @@ export type NotificationRow = {
   osDisplay: "unobserved";
   attempt: number;
   quietHoursOverride: boolean;
-  sourceKind: "event" | "task";
+  sourceKind: "event" | "task" | "habit";
   title: string;
 };
 

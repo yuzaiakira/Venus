@@ -82,12 +82,18 @@ export const reminderRuleSchema = z
     id: z.string().uuid(),
     eventId: z.string().uuid().nullable(),
     taskId: z.string().uuid().nullable(),
+    habitId: z.string().uuid().nullable().default(null),
     offsetMinutes: z.number().int().nullable(),
     absoluteTime: z.number().nullable(),
     severity: z.enum(["normal", "important"]),
     quietHoursOverride: z.boolean(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const owners = [value.eventId, value.taskId, value.habitId].filter(Boolean);
+    if (owners.length !== 1)
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "exactly one reminder owner is required" });
+  });
 export const notificationSchema = z
   .object({
     idempotencyKey: z.string(),
@@ -120,7 +126,7 @@ export const notificationSchema = z
     osDisplay: z.literal("unobserved"),
     attempt: z.number().int().min(1),
     quietHoursOverride: z.boolean(),
-    sourceKind: z.enum(["event", "task"]),
+    sourceKind: z.enum(["event", "task", "habit"]),
     title: z.string(),
   })
   .strict();

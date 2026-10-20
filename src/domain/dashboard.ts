@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const workspaceSchemaVersion = 4;
+export const workspaceSchemaVersion = 5;
 export const logicalColumns = 4;
 export const maxAssetBytes = 5 * 1024 * 1024;
 export const maxAssetPixels = 8_000_000;
@@ -25,6 +25,7 @@ export const widgetTypes = [
   "notes",
   "briefing",
   "capture",
+  "habits",
 ] as const;
 export const sharedKinds = ["note", "task", "event", "bookmark"] as const;
 export const allowedMime = ["image/png", "image/jpeg", "image/webp"] as const;
@@ -58,6 +59,7 @@ export const ModuleFlagsSchema = z
     notes: z.boolean(),
     briefing: z.boolean(),
     capture: z.boolean(),
+    habits: z.boolean(),
   })
   .strict();
 export const BootstrapSchema = z
@@ -152,6 +154,7 @@ export const defaultModules: Bootstrap["modules"] = {
   notes: true,
   briefing: true,
   capture: true,
+  habits: true,
 };
 
 export function defaultBootstrap(timeZone = "UTC"): Bootstrap {

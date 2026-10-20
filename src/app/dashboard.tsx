@@ -43,6 +43,7 @@ import { CaptureDialog } from "./capture";
 import { NotificationCenter } from "./notification-center";
 import { applyDocument, paintUploadedWallpaper } from "./document";
 import { LibraryScreen } from "./library";
+import { HabitsScreen } from "./habits";
 import { PluginStudio, PluginWidget } from "./plugin-studio";
 import { SettingsScreen } from "./settings";
 import { Icon } from "./icons";
@@ -100,6 +101,7 @@ export function DashboardScreen(props: {
     | "calendar"
     | "plugins"
     | "settings"
+    | "habits"
   >("home");
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [reminders, setReminders] = useState<NotificationRecord[]>([]);
@@ -410,6 +412,11 @@ export function DashboardScreen(props: {
       label: t("nav.tasks"),
     },
     { id: "notes" as const, icon: "note" as const, label: t("nav.notes") },
+    {
+      id: "habits" as const,
+      icon: "checkCircle" as const,
+      label: t("widget.habitsTitle"),
+    },
     {
       id: "calendar" as const,
       icon: "calendar" as const,
@@ -774,6 +781,13 @@ export function DashboardScreen(props: {
                 onChanged={reload}
               />
             ) : null}
+            {view === "habits" && library ? (
+              <HabitsScreen
+                habits={library.habits}
+                productivity={props.productivity}
+                locale={snapshot.bootstrap.locale}
+              />
+            ) : null}
             {view === "home" ? (
               <>
                 <section className="hero card-glass" aria-label={t("nav.home")}>
@@ -871,7 +885,8 @@ export function DashboardScreen(props: {
             view !== "home" &&
             view !== "calendar" &&
             view !== "plugins" &&
-            view !== "settings" ? (
+            view !== "settings" &&
+            view !== "habits" ? (
               <LibraryScreen
                 view={view}
                 selectedNoteId={selectedNoteId}
@@ -904,7 +919,9 @@ export function DashboardScreen(props: {
                             ? () => setView("calendar")
                             : widget.widgetType === "bookmarks"
                               ? () => setView("bookmarks")
-                              : undefined;
+                              : widget.widgetType === "habits"
+                                ? () => setView("habits")
+                                : undefined;
                     return (
                       <article
                         key={widget.id}
@@ -989,6 +1006,7 @@ export function DashboardScreen(props: {
                                 online={online}
                                 notes={library?.notes ?? []}
                                 tasks={library?.tasks ?? []}
+                                habits={library?.habits ?? []}
                                 bookmarks={library?.bookmarks ?? []}
                                 events={events}
                                 timer={activeTimer}
@@ -1015,6 +1033,11 @@ export function DashboardScreen(props: {
                                   setCaptureKind(kind);
                                   setCapture(true);
                                 }}
+                                onToggleHabit={(id, revision, date) =>
+                                  void props.productivity
+                                    .toggleHabit(id, revision, date)
+                                    .catch(() => setNotice(t("settings.error")))
+                                }
                                 onToggleTask={(id, revision, done) =>
                                   void props.productivity
                                     .saveTask(id, revision, {
@@ -1435,6 +1458,7 @@ function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
     notes: "widget.notesTitle",
     briefing: "widget.briefingTitle",
     capture: "widget.captureTitle",
+    habits: "widget.habitsTitle",
   };
   return t(labels[type]);
 }

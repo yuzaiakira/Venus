@@ -9,7 +9,11 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci
-      - run: npm run lint && npm run typecheck && npm run unit && npm run test:integration && npm run format:check && npm run test:security
+      # Security checks inspect generated Firefox bundles, so build them in
+      # this job before invoking the assertions.
+      - run: npm run lint && npm run typecheck && npm run unit && npm run test:integration && npm run format:check
+      - run: npm run build:firefox
+      - run: npm run test:security
   browsers:
     runs-on: ubuntu-latest
     strategy:

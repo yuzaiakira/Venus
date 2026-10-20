@@ -37,10 +37,12 @@ import {
   snoozeRow,
 } from "../domain/time/schedule";
 import { VenusTemporal } from "../domain/time/temporal";
+import type { HabitRecord } from "../domain/productivity";
 
 const sweepAlarm = "venus-sweep";
 
 export interface CalendarDatabase {
+  habits: { get(id: string): Promise<HabitRecord | undefined>; toArray(): Promise<HabitRecord[]> };
   events: {
     get(id: string): Promise<EventRecord | undefined>;
     toArray(): Promise<EventRecord[]>;

@@ -179,6 +179,91 @@ export type TaskRecord = z.infer<typeof taskSchema>;
 export type LocalBookmarkRecord = z.infer<typeof localBookmarkSchema>;
 export type BookmarkSnapshotRecord = z.infer<typeof bookmarkSnapshotSchema>;
 
+export const habitSchema = z
+  .object({
+    ...stampSchema,
+    title: z.string().min(1).max(120),
+    frequency: z.enum(["daily", "weekly"]),
+    checkIns: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(730),
+  })
+  .strict();
+export type HabitRecord = z.infer<typeof habitSchema>;
+
+export function habitStreak(habit: HabitRecord, today: string) {
+  if (habit.frequency === "weekly") {
+    const weeks = new Set(habit.checkIns.map(weekKey));
+    let cursor = weekKey(today),
+      streak = 0;
+    while (weeks.has(cursor)) {
+      streak += 1;
+      cursor = previousWeek(cursor);
+    }
+    return streak;
+  }
+  const complete = new Set(habit.checkIns);
+  let cursor = new Date(`${today}T00:00:00Z`);
+  let streak = 0;
+  while (complete.has(cursor.toISOString().slice(0, 10))) {
+    streak += 1;
+    cursor = new Date(cursor.getTime() - 86_400_000);
+  }
+  return streak;
+}
+export function habitBestStreak(habit: HabitRecord) {
+  const keys = [
+    ...new Set(
+      habit.checkIns.map(
+        habit.frequency === "weekly" ? weekKey : (value) => value,
+      ),
+    ),
+  ].sort();
+  let best = 0,
+    run = 0,
+    previous = "";
+  for (const key of keys) {
+    const adjacent =
+      previous &&
+      (habit.frequency === "weekly"
+        ? nextWeek(previous) === key
+        : nextDay(previous) === key);
+    run = adjacent ? run + 1 : 1;
+    best = Math.max(best, run);
+    previous = key;
+  }
+  return best;
+}
+export function habitState(habit: HabitRecord, date: string) {
+  if (habit.checkIns.includes(date)) return "completed" as const;
+  const today = new Date().toISOString().slice(0, 10);
+  if (date > today) return "upcoming" as const;
+  if (habit.frequency === "weekly")
+    return weekKey(date) < weekKey(today)
+      ? ("missed" as const)
+      : ("scheduled" as const);
+  return date < today ? ("missed" as const) : ("scheduled" as const);
+}
+function nextDay(value: string) {
+  return new Date(new Date(`${value}T00:00:00Z`).getTime() + 86400000)
+    .toISOString()
+    .slice(0, 10);
+}
+function weekKey(value: string) {
+  const d = new Date(`${value}T00:00:00Z`);
+  const day = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+function previousWeek(value: string) {
+  const d = new Date(`${value}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 7);
+  return d.toISOString().slice(0, 10);
+}
+function nextWeek(value: string) {
+  const d = new Date(`${value}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 7);
+  return d.toISOString().slice(0, 10);
+}
+
 export interface BrowserBookmarkNode {
   id: string;
   title: string;
