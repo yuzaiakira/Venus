@@ -90,6 +90,11 @@ try {
       `--load-extension=${extension}`,
     ],
   });
+  await context.tracing.start({
+    screenshots: true,
+    snapshots: true,
+    sources: true,
+  });
   await context.setOffline(true);
   evidence.browser = context.browser().version();
   const page = await context.newPage();
@@ -332,12 +337,21 @@ try {
 } catch (error) {
   evidence.error =
     error instanceof Error ? (error.stack ?? error.message) : String(error);
+  const failedPage = context?.pages().at(-1);
+  await failedPage
+    ?.screenshot({ path: join(evidenceDir, "habit-reminder-failure.png") })
+    .catch(() => {});
   await writeFile(
     join(evidenceDir, "habit-reminder-browser.json"),
     JSON.stringify(evidence, null, 2),
   ).catch(() => {});
   throw error;
 } finally {
-  await context?.close();
+  if (context) {
+    await context.tracing
+      .stop({ path: join(evidenceDir, "habit-reminder-trace.zip") })
+      .catch(() => {});
+    await context.close();
+  }
   await rm(profile, { recursive: true, force: true });
 }

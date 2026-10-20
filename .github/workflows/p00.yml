@@ -13,6 +13,7 @@ jobs:
       # this job before invoking the assertions.
       - run: npm run lint && npm run typecheck && npm run unit && npm run test:integration && npm run format:check
       - run: npm run build:firefox
+      - run: npm run build:chrome
       - run: npm run test:security
   browsers:
     runs-on: ubuntu-latest
@@ -26,13 +27,62 @@ jobs:
         with:
           node-version: "24"
       - run: npm ci
-      - run: npm run build:${{ matrix.target }}
-      - run: npm run setup:browsers -- ${{ matrix.target }}
-      - run: xvfb-run npm run test:smoke:${{ matrix.target }}
-      - if: matrix.target == 'chrome'
+      # Firefox acceptance deliberately uses a supported official Firefox
+      # build with geckodriver. It is separate from Playwright's patched build.
+      - name: Provision official Firefox
+        id: firefox
+        if: matrix.target == 'firefox'
+        continue-on-error: true
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: latest
+      - name: Install Chromium runtime dependencies
+        id: chrome-deps
+        if: matrix.target == 'chrome'
+        continue-on-error: true
+        run: npx playwright install-deps chromium
+      - name: Build extension
+        id: build
+        continue-on-error: true
+        run: npm run build:${{ matrix.target }}
+      - name: Provision browser driver
+        id: setup
+        if: ${{ always() && steps.build.outcome == 'success' && (matrix.target == 'chrome' || steps.firefox.outcome == 'success') && (matrix.target == 'firefox' || steps.chrome-deps.outcome == 'success') }}
+        continue-on-error: true
+        env:
+          FIREFOX_BIN: ${{ steps.firefox.outputs.firefox-path }}
+        run: npm run setup:browsers -- ${{ matrix.target }}
+      - name: Run New Tab and Habit Tracker acceptance
+        id: smoke
+        if: ${{ always() && steps.setup.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          FIREFOX_BIN: ${{ steps.firefox.outputs.firefox-path }}
+          GECKODRIVER_LOG: evidence/P00/geckodriver.log
+          P00_EVIDENCE_DIR: evidence/P00
+        run: xvfb-run npm run test:smoke:${{ matrix.target }}
+      - name: Run Chromium Habit Reminder workflow
+        id: habit
+        if: ${{ always() && matrix.target == 'chrome' && steps.smoke.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          P00_EVIDENCE_DIR: evidence/P00
         run: xvfb-run npm run test:browser:habits
+      - name: Classify browser acceptance result
+        if: always()
+        env:
+          BROWSER_TARGET: ${{ matrix.target }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          FIREFOX_PROVISION_OUTCOME: ${{ steps.firefox.outcome }}
+          CHROME_DEPS_OUTCOME: ${{ steps.chrome-deps.outcome }}
+          SETUP_OUTCOME: ${{ steps.setup.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          HABIT_OUTCOME: ${{ steps.habit.outcome }}
+          P00_EVIDENCE_DIR: evidence/P00
+        run: node scripts/classify-browser-acceptance.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: p00-${{ matrix.target }}-evidence
           path: evidence/P00
+          if-no-files-found: warn

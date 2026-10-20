@@ -175,6 +175,10 @@ export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
       "Firefox completion did not retain the next daily occurrence",
     );
     evidence.checks.push("alarm-notification-center-done-next-occurrence");
+    await writeFile(
+      join(evidenceDir, "habit-reminder-firefox-en.png"),
+      Buffer.from(await driver.takeScreenshot(), "base64"),
+    );
 
     await driver.findElement(By.css('[aria-label="Settings"]')).click();
     const language = await driver.findElement(By.css("select"));
@@ -196,6 +200,10 @@ export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
     );
     evidence.checks.push("persian-rtl-responsive");
     await writeFile(
+      join(evidenceDir, "habit-reminder-firefox-fa.png"),
+      Buffer.from(await driver.takeScreenshot(), "base64"),
+    );
+    await writeFile(
       join(evidenceDir, "habit-reminder-firefox.json"),
       JSON.stringify(evidence, null, 2),
     );
@@ -203,6 +211,10 @@ export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
   } catch (error) {
     evidence.error =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
+    await writeFile(
+      join(evidenceDir, "habit-reminder-firefox-failure.png"),
+      Buffer.from(await driver.takeScreenshot(), "base64"),
+    ).catch(() => {});
     await writeFile(
       join(evidenceDir, "habit-reminder-firefox.json"),
       JSON.stringify(evidence, null, 2),
