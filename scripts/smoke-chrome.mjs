@@ -1,10 +1,12 @@
+/* global chrome */
 import { browserProbes } from "./browser-probes.mjs";
 import { chromeLifecycle } from "./chrome-lifecycle.mjs";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { chromiumExecutable } from "./chromium-executable.mjs";
+
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= resolve(".browser-cache");
 const { chromium } = await import("@playwright/test");
 const executablePath = chromiumExecutable(chromium);
@@ -14,30 +16,128 @@ if (!executablePath || !existsSync(executablePath))
   );
 if (!existsSync(".output/chrome-mv3/manifest.json"))
   throw new Error("Chrome smoke FAILED: build missing");
+
 const profile = await mkdtemp(join(tmpdir(), "Venus-chrome-"));
 const extension = resolve(".output/chrome-mv3");
 const evidenceDir = process.env.P00_EVIDENCE_DIR ?? "evidence/P00";
+const launchSettings = {
+  executablePath,
+  chromiumSandbox: true,
+  // Chrome only enables unpacked extensions reliably in a headed persistent
+  // context. CI supplies the display through xvfb-run.
+  headless: false,
+  args: [
+    `--disable-extensions-except=${extension}`,
+    `--load-extension=${extension}`,
+  ],
+};
+const evidence = {
+  executablePath,
+  sandbox: true,
+  launchSettings,
+  extension: {
+    directory: extension,
+    manifest: JSON.parse(
+      readFileSync(join(extension, "manifest.json"), "utf8"),
+    ),
+    serviceWorkers: [],
+  },
+  consoleErrors: [],
+  pageExceptions: [],
+};
 let context;
+let page;
+
+async function collectExtensionEvidence() {
+  if (!context) return;
+  const workers = context.serviceWorkers();
+  evidence.extension.serviceWorkers = await Promise.all(
+    workers.map(async (worker) => ({
+      url: worker.url(),
+      runtime: await worker
+        .evaluate(() => ({
+          id: chrome.runtime.id,
+          manifest: chrome.runtime.getManifest(),
+        }))
+        .catch((error) => ({ error: String(error) })),
+    })),
+  );
+}
+
+async function collectPageEvidence(stage) {
+  if (!page) return;
+  evidence.page = {
+    stage,
+    url: page.url(),
+    title: await page.title().catch((error) => `ERROR: ${error}`),
+    runtime: await page
+      .evaluate(() => ({
+        id: chrome.runtime?.id ?? null,
+        manifest: chrome.runtime?.getManifest?.() ?? null,
+      }))
+      .catch((error) => ({ error: String(error) })),
+  };
+  const [html, body] = await Promise.all([
+    page.content().catch((error) => `<!-- ${error} -->`),
+    page
+      .locator("body")
+      .innerHTML()
+      .catch((error) => `<!-- ${error} -->`),
+  ]);
+  await Promise.all([
+    writeFile(join(evidenceDir, `chrome-newtab-${stage}.html`), html),
+    writeFile(join(evidenceDir, `chrome-newtab-${stage}-body.html`), body),
+    page
+      .screenshot({ path: join(evidenceDir, `chrome-newtab-${stage}.png`) })
+      .catch(() => {}),
+  ]);
+}
+
 const launch = async () => {
   const launched = await chromium.launchPersistentContext(profile, {
-    executablePath,
-    chromiumSandbox: true,
-    headless: process.env.P00_HEADED !== "1",
-    args: [
-      `--disable-extensions-except=${extension}`,
-      `--load-extension=${extension}`,
-    ],
+    ...launchSettings,
   });
   await launched.setOffline(true);
   return launched;
 };
+
 try {
-  context = await launch();
-  const page = await context.newPage();
-  await page.goto("chrome://newtab/");
-  await page.locator(".hero h1").waitFor({ timeout: 15000 });
   await mkdir(evidenceDir, { recursive: true });
+  context = await launch();
+  await context.tracing.start({
+    screenshots: true,
+    snapshots: true,
+    sources: true,
+  });
+  evidence.version = context.browser()?.version();
+  page = await context.newPage();
+  page.on("console", (message) => {
+    if (message.type() === "error") evidence.consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => evidence.pageExceptions.push(String(error)));
+  if (context.serviceWorkers().length === 0)
+    await context
+      .waitForEvent("serviceworker", { timeout: 5_000 })
+      .catch(() => undefined);
+  await collectExtensionEvidence();
+
+  // This must be Chrome's New Tab URL. Opening an extension URL directly does
+  // not prove that the extension replaced the browser's New Tab page.
+  await page.goto("chrome://newtab/");
+  await page.getByRole("heading", { name: "Venus", exact: true }).waitFor();
+  await collectPageEvidence("success");
   await page.screenshot({ path: join(evidenceDir, "chrome-newtab.png") });
+
+  const extensionId = evidence.extension.serviceWorkers
+    .map((worker) => worker.runtime?.id)
+    .find(Boolean);
+  if (!extensionId)
+    throw new Error("Chrome extension service worker did not expose an ID");
+  if (evidence.page.runtime?.id !== extensionId)
+    throw new Error(
+      "Chrome New Tab content did not run in the loaded Venus extension",
+    );
+
   const optionsUrl = await page.evaluate(() =>
     globalThis.chrome.runtime.getURL("options.html"),
   );
@@ -53,7 +153,7 @@ try {
     join(evidenceDir, "chrome-smoke.json"),
     JSON.stringify(
       {
-        version: context.browser()?.version(),
+        ...evidence,
         newtab: "PASS",
         offline,
         apiEvidence,
@@ -72,23 +172,21 @@ try {
     await chromeLifecycle(context, launch, evidenceDir);
 } catch (error) {
   await mkdir(evidenceDir, { recursive: true });
+  await collectExtensionEvidence();
+  await collectPageEvidence("failure");
+  evidence.error =
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
   await writeFile(
     join(evidenceDir, "chrome-smoke-failure.json"),
-    JSON.stringify(
-      {
-        executablePath,
-        sandbox: true,
-        error:
-          error instanceof Error
-            ? (error.stack ?? error.message)
-            : String(error),
-      },
-      null,
-      2,
-    ),
+    JSON.stringify(evidence, null, 2),
   );
   throw error;
 } finally {
-  await context?.close();
+  if (context) {
+    await context.tracing
+      .stop({ path: join(evidenceDir, "chrome-newtab-trace.zip") })
+      .catch(() => {});
+    await context.close();
+  }
   await rm(profile, { recursive: true, force: true });
 }

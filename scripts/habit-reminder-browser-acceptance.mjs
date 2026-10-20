@@ -83,7 +83,10 @@ try {
   context = await chromium.launchPersistentContext(profile, {
     executablePath,
     chromiumSandbox: true,
-    headless: true,
+    // The test loads an unpacked extension and validates Chrome's real New
+    // Tab override. Chromium only supports that reliably in headed mode; CI
+    // runs this command under xvfb-run.
+    headless: false,
     viewport: { width: 1440, height: 900 },
     args: [
       `--disable-extensions-except=${extension}`,

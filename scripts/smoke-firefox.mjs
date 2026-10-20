@@ -10,15 +10,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, basename } from "node:path";
 import { execFileSync } from "node:child_process";
 import { verifyHabitReminderFirefox } from "./habit-reminder-firefox.mjs";
-import {
-  mkdir,
-  writeFile,
-  mkdtemp,
-  rm,
-  readdir,
-  symlink,
-  copyFile,
-} from "node:fs/promises";
+import { mkdir, writeFile, mkdtemp, rm, cp } from "node:fs/promises";
 const evidenceDir = process.env.P00_EVIDENCE_DIR ?? "evidence/P00";
 const cachedBrowser = existsSync(".browser-cache/driver.json")
   ? JSON.parse(readFileSync(".browser-cache/driver.json", "utf8")).firefox
@@ -63,35 +55,34 @@ const policies = {
 };
 // Release Firefox ignores browser.policies.alternatePath unless
 // Cu.isInAutomation is true, and MOZ_AUTOMATION does not set that flag.
-// A disposable application directory of symlinks plus its own
+// A disposable copy of the application bundle plus its own
 // distribution/policies.json is loaded on a normal release build. It does
 // not change /usr/lib/firefox or the user's Firefox profile.
 const installedBinary = realpathSync(binary);
 const installedApp = process.env.FIREFOX_APP_DIR ?? dirname(installedBinary);
-const executableName = basename(installedBinary);
+// Preserve the command name used by the official Firefox distribution. A
+// resolved source binary may be firefox-bin or a launcher target; running it
+// under the original name keeps XREAppDist rooted in this disposable app.
+const launcherName = basename(binary);
 const appDir = join(scratch, "app");
 const appDist = join(appDir, "distribution");
-await mkdir(appDist, { recursive: true });
-for (const name of await readdir(installedApp)) {
-  if (name === "distribution") continue;
-  if (name === executableName) {
-    await copyFile(join(installedApp, name), join(appDir, name));
-    continue;
-  }
-  await symlink(join(installedApp, name), join(appDir, name));
-}
-if (existsSync(join(installedApp, "distribution/distribution.ini")))
-  await copyFile(
-    join(installedApp, "distribution/distribution.ini"),
-    join(appDist, "distribution.ini"),
+// Firefox resolves XREAppDist through resources such as libxul. Symlinking
+// those resources to the runner's installation causes policy discovery to
+// resolve there instead of in this disposable app. Copy the complete official
+// bundle so its distribution directory, policy and loaded resources agree.
+await cp(installedApp, appDir, { recursive: true, dereference: true });
+if (!existsSync(join(appDir, launcherName)))
+  await preflightFailure(
+    `Firefox smoke FAILED: launcher ${launcherName} was not in the official application directory`,
   );
+await mkdir(appDist, { recursive: true });
 await writeFile(join(appDist, "policies.json"), JSON.stringify(policies));
 const policiesPath = join(scratch, "policies.json");
 await writeFile(policiesPath, JSON.stringify(policies));
 const wrapper = join(scratch, "firefox-wrapper.sh");
 await writeFile(
   wrapper,
-  `#!/bin/sh\nexec '${join(appDir, executableName).replaceAll("'", "'\\''")}' -remote-allow-system-access "$@"\n`,
+  `#!/bin/sh\nexec '${join(appDir, launcherName).replaceAll("'", "'\\''")}' -remote-allow-system-access "$@"\n`,
   { mode: 0o755 },
 );
 const profileDir = join(scratch, "profile");
@@ -146,6 +137,9 @@ try {
   // Use Firefox's real New Tab command, not navigation to the extension URL.
   await driver.setContext("chrome");
   const policy = await driver.executeScript(`
+    const appDist = Services.dirsvc.get("XREAppDist", Ci.nsIFile);
+    const policyFile = appDist.clone();
+    policyFile.append("policies.json");
     return {
       labsAllowed: Services.policies.isAllowed("FirefoxLabs"),
       rolloutsAllowed: Services.policies.isAllowed("NimbusRollouts"),
@@ -153,7 +147,10 @@ try {
       automation: Services.env.exists("MOZ_AUTOMATION"),
       componentsAutomation: Cu.isInAutomation,
       alternatePath: Services.prefs.getStringPref("browser.policies.alternatePath", ""),
-      appDist: Services.dirsvc.get("XREAppDist", Ci.nsIFile).path,
+      appDist: appDist.path,
+      appExecutable: Services.dirsvc.get("XREExeF", Ci.nsIFile).path,
+      policyFile: policyFile.path,
+      policyFileExists: policyFile.exists(),
       status: String(Services.policies.status),
     };
   `);
@@ -162,9 +159,14 @@ try {
     join(evidenceDir, "firefox-policy.json"),
     JSON.stringify(policy, null, 2),
   );
+  if (policy.appDist !== appDist || !policy.policyFileExists)
+    throw new Error(
+      "Firefox harness policy directory was not active: " +
+        JSON.stringify({ expectedAppDist: appDist, policy }),
+    );
   if (policy.labsAllowed !== false)
     throw new Error(
-      "Disposable Firefox policy was not applied: " + JSON.stringify(policy),
+      "Firefox harness policy was not applied: " + JSON.stringify(policy),
     );
   const newTabURL = await driver.executeScript(`
     const { AboutNewTab } = ChromeUtils.importESModule(
@@ -288,6 +290,26 @@ try {
   console.log(
     "Firefox New Tab smoke passed; Home consent and APIs require separate manual checks.",
   );
+} catch (error) {
+  await writeFile(
+    join(evidenceDir, "firefox-smoke-failure.json"),
+    JSON.stringify(
+      {
+        binary,
+        installedBinary,
+        installedApp,
+        launcher: join(appDir, launcherName),
+        expectedAppDist: appDist,
+        error:
+          error instanceof Error
+            ? (error.stack ?? error.message)
+            : String(error),
+      },
+      null,
+      2,
+    ),
+  ).catch(() => {});
+  throw error;
 } finally {
   const teardown = { status: "PASS", stages: [] };
   try {

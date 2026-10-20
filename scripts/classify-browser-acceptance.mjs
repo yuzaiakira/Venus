@@ -8,6 +8,7 @@ if (!["firefox", "chrome"].includes(target))
 
 const stages = [
   ["extension build", process.env.BUILD_OUTCOME],
+  ["Xvfb display server", process.env.DISPLAY_OUTCOME],
   ["browser provisioning", process.env.SETUP_OUTCOME],
   ["New Tab and Habit Tracker acceptance", process.env.SMOKE_OUTCOME],
 ];
@@ -54,7 +55,10 @@ const failed = stages.filter(([, outcome]) =>
 );
 const environmentPattern =
   /FIREFOX_BIN unavailable|browser binary unavailable|HTTP(?:\s+)?403|Domain.*forbidden|download.*forbidden|failed to install|no sandbox-capable|sandbox helper.*(wrong|invalid) ownership|No usable sandbox|setuid sandbox|Executable doesn't exist|missing .*runtime dependenc/i;
+const harnessPattern =
+  /Firefox harness policy (?:directory was not active|was not applied)|Disposable Firefox policy was not applied/i;
 const infrastructureStage = new Set([
+  "Xvfb display server",
   "official Firefox provisioning",
   "Chromium runtime dependencies",
   "browser provisioning",
@@ -68,9 +72,11 @@ const environmentBlocked =
 const status =
   incomplete.length === 0
     ? "PASS"
-    : environmentBlocked
-      ? "ENVIRONMENT_BLOCKED"
-      : "APPLICATION_FAILURE";
+    : harnessPattern.test(diagnostics)
+      ? "TEST_HARNESS_FAILURE"
+      : environmentBlocked
+        ? "ENVIRONMENT_BLOCKED"
+        : "APPLICATION_FAILURE";
 const lines = [
   `## ${target} extension acceptance: ${status}`,
   "",

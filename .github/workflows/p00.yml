@@ -27,6 +27,10 @@ jobs:
         with:
           node-version: "24"
       - run: npm ci
+      - name: Install virtual display server
+        id: display
+        continue-on-error: true
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
       # Firefox acceptance deliberately uses a supported official Firefox
       # build with geckodriver. It is separate from Playwright's patched build.
       - name: Provision official Firefox
@@ -54,7 +58,7 @@ jobs:
         run: npm run setup:browsers -- ${{ matrix.target }}
       - name: Run New Tab and Habit Tracker acceptance
         id: smoke
-        if: ${{ always() && steps.setup.outcome == 'success' }}
+        if: ${{ always() && steps.setup.outcome == 'success' && steps.display.outcome == 'success' }}
         continue-on-error: true
         env:
           FIREFOX_BIN: ${{ steps.firefox.outputs.firefox-path }}
@@ -75,6 +79,7 @@ jobs:
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           FIREFOX_PROVISION_OUTCOME: ${{ steps.firefox.outcome }}
           CHROME_DEPS_OUTCOME: ${{ steps.chrome-deps.outcome }}
+          DISPLAY_OUTCOME: ${{ steps.display.outcome }}
           SETUP_OUTCOME: ${{ steps.setup.outcome }}
           SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
           HABIT_OUTCOME: ${{ steps.habit.outcome }}
