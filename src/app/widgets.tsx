@@ -77,6 +77,12 @@ const chrome: Record<
     title: "widget.briefingTitle",
     sub: "widget.briefingSub",
   },
+  capture: {
+    icon: "note",
+    tone: "pink",
+    title: "widget.captureTitle",
+    sub: "widget.captureSub",
+  },
 };
 
 export function WidgetChrome(props: {
@@ -133,6 +139,7 @@ export function WidgetBody(props: {
   now: Date;
   online: boolean;
   onWebSearch: (query: string) => void;
+  onCapture?: ((kind: "note" | "task" | "event") => void) | undefined;
   onToggleTask: (id: string, revision: number, done: boolean) => void;
   onOpenTask?: ((id: string) => void) | undefined;
   onCreateTask?: (() => void) | undefined;
@@ -251,6 +258,36 @@ export function WidgetBody(props: {
         >
           {t("briefing.focus")}
         </button>
+      </div>
+    );
+  }
+  if (props.widget.widgetType === "capture") {
+    return (
+      <div className="capture-widget">
+        <p className="muted">{t("capture.widgetHint")}</p>
+        <div className="cluster">
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => props.onCapture?.("task")}
+          >
+            {t("capture.task")}
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => props.onCapture?.("note")}
+          >
+            {t("capture.noteKind")}
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => props.onCapture?.("event")}
+          >
+            {t("capture.event")}
+          </button>
+        </div>
       </div>
     );
   }

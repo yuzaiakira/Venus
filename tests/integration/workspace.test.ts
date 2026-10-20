@@ -163,7 +163,7 @@ it("migrates v2 preferences and keeps assistant widgets singleton per profile", 
   const current = defaultBootstrap("UTC");
   const legacy = {
     ...current,
-    schemaVersion: 2,
+    schemaVersion: 3,
     modules: Object.fromEntries(
       Object.entries(current.modules).filter(([key]) => key !== "briefing"),
     ),
@@ -172,7 +172,7 @@ it("migrates v2 preferences and keeps assistant widgets singleton per profile", 
     memoryPreferences({ "venus.bootstrap": legacy }),
   );
   const first = await workspace.load();
-  expect(first.bootstrap.schemaVersion).toBe(3);
+  expect(first.bootstrap.schemaVersion).toBe(4);
   expect(first.bootstrap.modules.briefing).toBe(true);
   const profile = first.profiles[0];
   if (!profile) throw new Error("missing profile");

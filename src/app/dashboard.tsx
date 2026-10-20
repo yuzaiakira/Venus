@@ -1010,6 +1010,11 @@ export function DashboardScreen(props: {
                                     setNotice(t("search.invalid"));
                                   }
                                 }}
+                                onCapture={(kind) => {
+                                  setCaptureToday(kind === "task");
+                                  setCaptureKind(kind);
+                                  setCapture(true);
+                                }}
                                 onToggleTask={(id, revision, done) =>
                                   void props.productivity
                                     .saveTask(id, revision, {
@@ -1429,6 +1434,7 @@ function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
     timer: "widget.focusTitle",
     notes: "widget.notesTitle",
     briefing: "widget.briefingTitle",
+    capture: "widget.captureTitle",
   };
   return t(labels[type]);
 }

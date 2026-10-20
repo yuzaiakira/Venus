@@ -43,7 +43,7 @@ equivalent transactional service operation.
 | Widget              | User need                           | Required capabilities                                                                              | Data and privacy                                                  | Status         |
 | ------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | -------------- |
 | Daily Briefing      | Know what matters now               | Top Today tasks, next calendar event and focus action; direct task opening                         | Reads existing local tasks, events and timer only                 | ✅ Implemented |
-| Quick Capture       | Save an idea in seconds             | Capture task, note or event; title-first entry; Today toggle; clear success/failure state          | Uses existing local capture services                              | ⬜ Planned     |
+| Quick Capture       | Save an idea in seconds             | Capture task, note or event; title-first entry; Today toggle; clear success/failure state          | Uses existing local capture services                              | ✅ Implemented |
 | AI Inbox            | Triage incoming material            | Review queue, classify to task/note/event, confidence/explanation, edit before save, reject/undo   | Local rules first; no remote AI without explicit opt-in           | ⬜ Planned     |
 | Habit Tracker       | Maintain routines                   | Daily/weekly habits, check-in, streak, schedule, missed state, history and reminder integration    | Local habit/check-in records                                      | ⬜ Planned     |
 | Goals & Progress    | Connect work to outcomes            | Goals, time frame, measurable progress, linked tasks/habits, milestones, weekly review             | Local goal, milestone and relation records                        | ⬜ Planned     |
@@ -59,7 +59,7 @@ equivalent transactional service operation.
    persisted drag-and-drop, accessible fallback controls. ✅ Implemented
 2. **Daily Briefing** — read-only synthesis of existing workspace data and
    direct actions. ✅ Implemented
-3. **Quick Capture** — a dashboard capture card using existing creation flows. ⬜
+3. **Quick Capture** — a dashboard capture card using existing creation flows. ✅ Implemented
 4. **Habit Tracker** — new local schema, history and dashboard card. ⬜
 5. **Goals & Progress** — goals/milestones and task/habit links. ⬜
 6. **Knowledge Review** — review scheduling for existing notes. ⬜
