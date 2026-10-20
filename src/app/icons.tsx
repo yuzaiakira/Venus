@@ -266,13 +266,7 @@ const icons: Record<IconName, ReactNode> = {
       strokeLinejoin="round"
     >
       <circle cx="12" cy="12" r="3.5" />
-      <ellipse
-        cx="12"
-        cy="12"
-        rx="10"
-        ry="5.5"
-        transform="rotate(-35 12 12)"
-      />
+      <ellipse cx="12" cy="12" rx="10" ry="5.5" transform="rotate(-35 12 12)" />
     </g>
   ),
   plugins: (

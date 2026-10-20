@@ -1,3 +1,10 @@
+import {
+  searchFold,
+  searchLibrary,
+  type NoteRecord,
+  type TaskRecord,
+  type LocalBookmarkRecord,
+} from "./productivity";
 export interface PaletteCommand {
   id: string;
   label: string;
@@ -6,10 +13,10 @@ export interface PaletteCommand {
   profileId: string;
 }
 export function filterCommands(commands: PaletteCommand[], query: string) {
-  const needle = query.trim().toLocaleLowerCase();
+  const needle = searchFold(query.trim());
   if (!needle) return commands;
   return commands.filter((command) =>
-    command.label.toLocaleLowerCase().includes(needle),
+    searchFold(command.label).includes(needle),
   );
 }
 export type PermissionOutcome =
@@ -32,4 +39,35 @@ export function permissionNoteKey(outcome: PermissionOutcome) {
 export function onboardingContinues(granted: boolean) {
   void granted;
   return true;
+}
+
+/** Command search and content search share the same authoritative library. */
+export function searchPalette(
+  commands: PaletteCommand[],
+  library: {
+    notes: NoteRecord[];
+    tasks: TaskRecord[];
+    bookmarks: LocalBookmarkRecord[];
+  },
+  query: string,
+) {
+  const filtered = filterCommands(commands, query);
+  if (!query.trim()) return filtered;
+  const hits = searchLibrary({ ...library, commands: [] }, query)
+    .slice(0, 30)
+    .map(
+      (hit): PaletteCommand => ({
+        id: `open-${hit.kind}:${hit.id}`,
+        label: hit.title,
+        group: "local",
+        available: true,
+        profileId: "",
+      }),
+    );
+  const web = commands.find((command) => command.id === "web");
+  return [
+    ...hits,
+    ...filtered,
+    ...(web && !filtered.some((command) => command.id === "web") ? [web] : []),
+  ];
 }

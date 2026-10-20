@@ -48,7 +48,10 @@ export function applyDocument(input: {
   style.setProperty("--error", tokens.error);
   style.setProperty("--success", tokens.success);
   style.setProperty("--accent", accentOk);
-  style.setProperty("--glass", solid);
+  style.setProperty(
+    "--glass",
+    `color-mix(in srgb, ${solid} ${Math.round(input.glassAlpha * 100)}%, transparent)`,
+  );
   style.setProperty("--blur", `${input.blurPx}px`);
   style.setProperty("--font-scale", String(input.bootstrap.fontScale));
   document.body.dataset.scene =

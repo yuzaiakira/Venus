@@ -113,14 +113,21 @@ test("untrusted plugin fields cannot name the zip.js codec import", () => {
     /await import\(\/\* webpackIgnore: true \*\/ \/\* @vite-ignore \*\/ codecURI\)/,
   );
   assert.match(library, /if \(!codecStreams\.has\(format\) && codecURI\)/);
-  const tokens = readdirSync(".output/firefox-mv3/chunks").find((name) =>
-    name.startsWith("tokens-"),
+  // Chunk names follow the import graph and are not a security contract.
+  const chunks = readdirSync(".output/firefox-mv3/chunks").filter((name) =>
+    name.endsWith(".js"),
   );
-  assert.ok(tokens);
-  const bundle = readFileSync(
-    join(".output/firefox-mv3/chunks", tokens),
-    "utf8",
+  const codecs = chunks
+    .map((name) =>
+      readFileSync(join(".output/firefox-mv3/chunks", name), "utf8"),
+    )
+    .filter((source) => /await import\([A-Za-z_$][\w$]*\)/.test(source));
+  assert.equal(
+    codecs.length,
+    1,
+    "Exactly one bundled codec registry may use a variable import",
   );
+  const bundle = codecs[0];
   const imports = bundle.match(/import\s*\(/g) ?? [];
   assert.equal(imports.length, 1);
   const at = bundle.indexOf("await import(e)");

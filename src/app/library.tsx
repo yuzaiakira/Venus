@@ -1,3 +1,4 @@
+import { TasksScreen } from "./tasks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   BrowserBookmarkPort,
@@ -8,6 +9,12 @@ import { WorkspaceError } from "../domain/dashboard";
 import { permissionNoteKey } from "../domain/commands";
 import {
   applyBlockLink,
+  canonicalHttpUrl,
+  toggleBlockMark,
+  convertBlock,
+  type NoteText,
+  plainText,
+  searchFold,
   blockPlain,
   emptyDocument,
   folderCycle,
@@ -19,6 +26,7 @@ import {
   type NoteBlock,
   type NoteDocument,
   type NoteRecord,
+  type NoteDraft,
 } from "../domain/productivity";
 import { translate, type MessageKey } from "../locales/messages";
 
@@ -28,6 +36,10 @@ export function LibraryScreen(props: {
   productivity: Productivity;
   bookmarks: BrowserBookmarkPort;
   locale: "en" | "fa";
+  selectedNoteId?: string | null;
+  selectedTaskId?: string | null;
+  onSelectedNote?: (id: string) => void;
+  onSelectedTask?: (id: string | null) => void;
 }) {
   if (props.view === "notes")
     return (
@@ -35,6 +47,8 @@ export function LibraryScreen(props: {
         library={props.library}
         productivity={props.productivity}
         locale={props.locale}
+        selectedId={props.selectedNoteId ?? null}
+        onSelected={props.onSelectedNote}
       />
     );
   if (props.view === "tasks")
@@ -43,6 +57,8 @@ export function LibraryScreen(props: {
         library={props.library}
         productivity={props.productivity}
         locale={props.locale}
+        selectedId={props.selectedTaskId ?? null}
+        onSelected={props.onSelectedTask}
       />
     );
   return (
@@ -59,11 +75,21 @@ function NotesScreen(props: {
   library: Library;
   productivity: Productivity;
   locale: "en" | "fa";
+  selectedId: string | null;
+  onSelected?: ((id: string) => void) | undefined;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(props.selectedId);
+  useEffect(() => {
+    if (props.selectedId) setSelected(props.selectedId);
+  }, [props.selectedId]);
+  function selectNote(id: string) {
+    setSelected(id);
+    props.onSelected?.(id);
+  }
+  const [error, setError] = useState("");
   const [mode, setMode] = useState<"active" | "archive" | "trash">("active");
-  const [layout, setLayout] = useState<"list" | "grid">("list");
+  const [layout, setLayout] = useState<"list" | "grid">("grid");
   const [query, setQuery] = useState("");
   const [folderId, setFolderId] = useState<string | null>(null);
   const folders = props.library.folders.filter(
@@ -78,19 +104,23 @@ function NotesScreen(props: {
   const visible = notes
     .filter((note) => (folderId ? note.folderId === folderId : true))
     .filter((note) =>
-      `${note.title} ${note.tags.join(" ")}`
-        .toLocaleLowerCase()
-        .includes(query.trim().toLocaleLowerCase()),
+      searchFold(
+        `${note.title} ${plainText(note.body)} ${note.tags.join(" ")}`,
+      ).includes(searchFold(query.trim())),
     )
     .sort(
       (a, b) =>
         Number(b.pinned) - Number(a.pinned) ||
+        (a.sortIndex ?? 0) - (b.sortIndex ?? 0) ||
         b.updatedAt.localeCompare(a.updatedAt),
     );
   const current =
     props.library.notes.find((note) => note.id === selected) ?? null;
   return (
-    <section className="card-glass content-card module" aria-label={t("nav.notes")}>
+    <section
+      className="card-glass content-card module"
+      aria-label={t("nav.notes")}
+    >
       <div className="page-header">
         <div>
           <span className="section-kicker">CAPTURE / 03</span>
@@ -108,7 +138,11 @@ function NotesScreen(props: {
                 body: emptyDocument(""),
                 folderId,
               })
-              .then((note) => setSelected(note.id))
+              .then((note) => {
+                setMode("active");
+                selectNote(note.id);
+              })
+              .catch(() => setError(t("notes.error")))
           }
         >
           {t("command.note")}
@@ -168,16 +202,51 @@ function NotesScreen(props: {
           </button>
         ))}
       </div>
+      {error ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <ul className={layout === "grid" ? "note-grid" : "note-list"}>
-        {visible.map((note) => (
-          <li key={note.id}>
+        {visible.map((note, index) => (
+          <li key={note.id} className="note-gallery-card card-glass">
             <button
               className="btn"
               type="button"
-              onClick={() => setSelected(note.id)}
+              onClick={() => selectNote(note.id)}
             >
               <bdi>{note.title}</bdi>
             </button>
+            <p className="note-snippet">
+              <bdi>{plainText(note.body).slice(0, 160)}</bdi>
+            </p>
+            <div className="cluster">
+              {([-1, 1] as const).map((direction) => (
+                <button
+                  className="btn"
+                  type="button"
+                  key={direction}
+                  aria-label={t(direction < 0 ? "repair.up" : "repair.down")}
+                  disabled={
+                    index + direction < 0 ||
+                    index + direction >= visible.length ||
+                    visible[index + direction]?.pinned !== note.pinned
+                  }
+                  onClick={() => {
+                    const next = [...visible];
+                    const other = next[index + direction];
+                    if (!other) return;
+                    next[index + direction] = note;
+                    next[index] = other;
+                    void props.productivity
+                      .reorderNotes(next)
+                      .catch(() => setError(t("notes.conflict")));
+                  }}
+                >
+                  {direction < 0 ? "↑" : "↓"}
+                </button>
+              ))}
+            </div>
             {note.tags.map((tag) => (
               <span key={tag} className="muted">
                 <bdi>{tag}</bdi>
@@ -192,6 +261,7 @@ function NotesScreen(props: {
           note={current}
           locale={props.locale}
           productivity={props.productivity}
+          folders={folders}
         />
       ) : (
         <p>{t("notes.empty")}</p>
@@ -209,6 +279,7 @@ function tagList(value: string) {
 
 function NoteEditor(props: {
   note: NoteRecord;
+  folders: Library["folders"];
   locale: "en" | "fa";
   productivity: Productivity;
 }) {
@@ -220,6 +291,34 @@ function NoteEditor(props: {
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState("saved");
   const [storedText, setStoredText] = useState("");
+  const draftId = useRef(crypto.randomUUID());
+  const [recoverable, setRecoverable] = useState<NoteDraft[]>([]);
+  const draftQueue = useRef(Promise.resolve());
+  function queueDraft(work: () => Promise<void>) {
+    const pending = draftQueue.current.then(work, work);
+    draftQueue.current = pending.catch(() => {});
+    return pending;
+  }
+  function persistDraft() {
+    const current = latest.current;
+    if (!current.dirty) return Promise.resolve();
+    const draft = {
+      id: draftId.current,
+      noteId: current.id,
+      expectedRevision: expectedRef.current,
+      title: current.title,
+      body: current.body,
+      tags: tagList(current.tags),
+      updatedAt: new Date().toISOString(),
+    };
+    return queueDraft(() => props.productivity.saveNoteDraft(draft));
+  }
+  useEffect(() => {
+    void props.productivity
+      .noteDrafts(props.note.id)
+      .then(setRecoverable)
+      .catch(() => setStatus("error"));
+  }, [props.productivity, props.note.id]);
   const expectedRef = useRef(props.note.revision);
   const chain = useRef(Promise.resolve());
   const latest = useRef({
@@ -267,6 +366,11 @@ function NoteEditor(props: {
     ) {
       setDirty(false);
       setStatus("saved");
+      await queueDraft(() =>
+        props.productivity.removeNoteDraft(draftId.current),
+      );
+    } else {
+      setStatus("idle");
     }
     return saved;
   }
@@ -276,6 +380,7 @@ function NoteEditor(props: {
       if (!current.dirty || current.status === "conflict") return;
       setStatus("saving");
       try {
+        await persistDraft();
         await writeContent(expectedRef.current);
       } catch (error) {
         if (error instanceof WorkspaceError && error.code === "conflict") {
@@ -306,6 +411,7 @@ function NoteEditor(props: {
     return enqueue(async () => {
       setStatus("saving");
       try {
+        if (latest.current.dirty) await writeContent(expectedRef.current);
         const saved = await props.productivity.saveNote(
           latest.current.id,
           expectedRef.current,
@@ -329,23 +435,37 @@ function NoteEditor(props: {
     });
   }
   useEffect(() => {
-    if (!dirty || status === "conflict") return;
+    if (!dirty) return;
+    void persistDraft().catch(() => setStatus("error"));
+  }, [title, body, tags, dirty]);
+  useEffect(() => {
+    if (
+      !dirty ||
+      status === "conflict" ||
+      status === "error" ||
+      status === "saving"
+    )
+      return;
     const handle = window.setTimeout(() => {
       void scheduleSave();
     }, 400);
     return () => window.clearTimeout(handle);
   }, [dirty, title, body, tags, status]);
   useEffect(() => {
-    return () => {
-      const current = latest.current;
-      if (!current.dirty || current.status === "conflict") return;
-      void props.productivity.saveNote(current.id, expectedRef.current, {
-        title: current.title,
-        body: current.body,
-        tags: tagList(current.tags),
-      });
-    };
-  }, [props.note.id, props.productivity]);
+    // Adopt external updates only while the editor has no unsaved draft.
+    if (!latest.current.dirty && props.note.revision > expectedRef.current)
+      adopt(props.note);
+  }, [props.note]);
+  useEffect(
+    () => () => {
+      // Flush through the same queue. Failed drafts are not reported as saved.
+      void persistDraft()
+        .then(() => scheduleSave())
+        .catch(() => {});
+    },
+    [props.note.id, props.productivity],
+  );
+
   return (
     <form
       data-note-revision={expected}
@@ -354,8 +474,51 @@ function NoteEditor(props: {
         void scheduleSave();
       }}
     >
+      {recoverable.length ? (
+        <div role="alert">
+          <p>{t("notes.recoveredDraft")}</p>
+          {recoverable.map((draft) => (
+            <div key={draft.id}>
+              <p>
+                <bdi>{draft.title}</bdi> · {draft.updatedAt}
+              </p>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => {
+                  setTitle(draft.title);
+                  setBody(draft.body);
+                  setTags(draft.tags.join(", "));
+                  remember(draft.expectedRevision);
+                  setDirty(true);
+                  setStatus("idle");
+                  setRecoverable([]);
+                }}
+              >
+                {t("notes.restoreDraft")}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={() =>
+                  void props.productivity
+                    .removeNoteDraft(draft.id)
+                    .then(() =>
+                      setRecoverable((rows) =>
+                        rows.filter((row) => row.id !== draft.id),
+                      ),
+                    )
+                    .catch(() => setStatus("error"))
+                }
+              >
+                {t("repair.delete")}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <p role="status" data-save-status={status}>
-        {status === "saving"
+        {status === "saving" || status === "idle"
           ? t("notes.saving")
           : status === "saved"
             ? t("notes.saved")
@@ -444,13 +607,33 @@ function NoteEditor(props: {
           }}
         />
       </label>
+      <label>
+        {t("notes.folder")}
+        <select
+          className="select"
+          value={props.note.folderId ?? ""}
+          onChange={(event) =>
+            void mutate({ folderId: event.target.value || null })
+          }
+        >
+          <option value="">{t("notes.moveRoot")}</option>
+          {props.folders.map((folder) => (
+            <option key={folder.id} value={folder.id}>
+              {folder.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="cluster">
+        <button className="btn primary" type="submit">
+          {t("notes.save")}
+        </button>
         <button
           className="btn"
           type="button"
           onClick={() => void mutate({ pinned: !props.note.pinned })}
         >
-          {t("notes.pin")}
+          {props.note.pinned ? t("notes.unpin") : t("notes.pin")}
         </button>
         <button
           className="btn"
@@ -462,7 +645,7 @@ function NoteEditor(props: {
             })
           }
         >
-          {t("notes.archive")}
+          {props.note.archived ? t("notes.restore") : t("notes.archive")}
         </button>
         <button
           className="btn"
@@ -479,7 +662,12 @@ function NoteEditor(props: {
           <button
             className="btn"
             type="button"
-            onClick={() => void props.productivity.purgeNote(props.note.id)}
+            onClick={() => {
+              if (window.confirm(t("repair.confirmDelete")))
+                void props.productivity
+                  .purgeNote(props.note.id)
+                  .catch(() => setStatus("error"));
+            }}
           >
             {t("notes.purge")}
           </button>
@@ -544,17 +732,12 @@ function BlockEditor(props: {
           className="select"
           value={props.block.type}
           onChange={(event) => {
-            const type = event.target.value;
-            if (type === "heading")
-              props.onChange({ type: "heading", level: 2, content: [] });
-            else if (type === "bulletList" || type === "orderedList")
-              props.onChange({ type, content: [] });
-            else if (type === "taskList")
-              props.onChange({
-                type: "taskList",
-                content: [{ type: "taskItem", checked: false, content: [] }],
-              });
-            else props.onChange({ type: "paragraph", content: [] });
+            props.onChange(
+              convertBlock(
+                props.block,
+                event.target.value as NoteBlock["type"],
+              ),
+            );
           }}
         >
           <option value="paragraph">{t("notes.paragraph")}</option>
@@ -566,6 +749,7 @@ function BlockEditor(props: {
       </label>
       <textarea
         className="field"
+        aria-label={t("notes.block")}
         value={text}
         onChange={(event) => {
           props.onChange(replaceBlockText(props.block, event.target.value));
@@ -575,14 +759,14 @@ function BlockEditor(props: {
         <button
           className="btn"
           type="button"
-          onClick={() => props.onChange(toggleMark(props.block, "bold"))}
+          onClick={() => props.onChange(toggleBlockMark(props.block, "bold"))}
         >
           {t("notes.bold")}
         </button>
         <button
           className="btn"
           type="button"
-          onClick={() => props.onChange(toggleMark(props.block, "italic"))}
+          onClick={() => props.onChange(toggleBlockMark(props.block, "italic"))}
         >
           {t("notes.italic")}
         </button>
@@ -621,36 +805,31 @@ function BlockEditor(props: {
         </button>
       </div>
       {linkError ? <p className="error">{linkError}</p> : null}
+      {props.block.type === "taskList"
+        ? props.block.content.map((item, index) => (
+            <label className="cluster" key={index}>
+              <input
+                type="checkbox"
+                checked={item.checked}
+                onChange={(event) => {
+                  if (props.block.type !== "taskList") return;
+                  props.onChange({
+                    ...props.block,
+                    content: props.block.content.map((row, i) =>
+                      i === index
+                        ? { ...row, checked: event.target.checked }
+                        : row,
+                    ),
+                  });
+                }}
+              />
+              <bdi>{item.content.map((node) => node.text).join("")}</bdi>
+            </label>
+          ))
+        : null}
       <DocumentView document={{ type: "doc", content: [props.block] }} />
     </div>
   );
-}
-
-function toggleMark(block: NoteBlock, mark: "bold" | "italic"): NoteBlock {
-  const text = blockPlain(block);
-  const source =
-    block.type === "paragraph" || block.type === "heading"
-      ? block.content[0]
-      : block.content[0]?.content[0];
-  const marks = source?.marks ?? [];
-  const next = marks.some((item) => item.type === mark)
-    ? marks.filter((item) => item.type !== mark)
-    : [...marks, { type: mark }];
-  const content = text ? [{ type: "text" as const, text, marks: next }] : [];
-  if (block.type === "paragraph" || block.type === "heading")
-    return { ...block, content };
-  if (block.type === "taskList")
-    return {
-      type: "taskList",
-      content: [
-        {
-          type: "taskItem",
-          checked: block.content[0]?.checked ?? false,
-          content,
-        },
-      ],
-    };
-  return { type: block.type, content: [{ type: "listItem", content }] };
 }
 
 export function DocumentView(props: { document: NoteDocument }) {
@@ -663,56 +842,73 @@ export function DocumentView(props: { document: NoteDocument }) {
   );
 }
 
+function InlineText(props: { nodes: NoteText[] }) {
+  return (
+    <>
+      {props.nodes.map((node, index) => {
+        const marks = node.marks ?? [];
+        let content = <bdi>{node.text}</bdi>;
+        if (marks.some((mark) => mark.type === "bold"))
+          content = <strong>{content}</strong>;
+        if (marks.some((mark) => mark.type === "italic"))
+          content = <em>{content}</em>;
+        const link = marks.find((mark) => mark.type === "link");
+        if (link?.type === "link") {
+          try {
+            content = (
+              <a
+                href={safeLink(link.href)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {content}
+              </a>
+            );
+          } catch {
+            /* Invalid links render as inert text. */
+          }
+        }
+        return <span key={index}>{content}</span>;
+      })}
+    </>
+  );
+}
 function BlockView(props: { block: NoteBlock }) {
-  const text =
-    props.block.type === "paragraph" || props.block.type === "heading"
-      ? props.block.content
-      : (props.block.content[0]?.content ?? []);
-  const marks = text[0]?.marks ?? [];
-  const value = text.map((node) => node.text).join("");
-  const link = marks.find((mark) => mark.type === "link");
-  const style = {
-    fontWeight: marks.some((mark) => mark.type === "bold") ? 700 : 400,
-    fontStyle: marks.some((mark) => mark.type === "italic")
-      ? "italic"
-      : "normal",
-  };
-  let href: string | null = null;
-  if (link && link.type === "link") {
-    try {
-      href = safeLink(link.href);
-    } catch {
-      href = null;
-    }
-  }
-  if (href) {
+  const block = props.block;
+  if (block.type === "paragraph")
     return (
-      <p style={style}>
-        <a href={href}>
-          <bdi>{value}</bdi>
-        </a>
+      <p className="note-text">
+        <InlineText nodes={block.content} />
       </p>
     );
-  }
-  if (props.block.type === "heading")
+  if (block.type === "heading")
     return (
-      <h3 style={style}>
-        <bdi>{value}</bdi>
+      <h3>
+        <InlineText nodes={block.content} />
       </h3>
     );
-  if (props.block.type === "taskList") {
-    const checked = props.block.content[0]?.checked ?? false;
+  if (block.type === "taskList")
     return (
-      <p style={style}>
-        <input type="checkbox" checked={checked} readOnly /> <bdi>{value}</bdi>
-      </p>
+      <ul className="checklist">
+        {block.content.map((item, index) => (
+          <li key={index}>
+            <input
+              type="checkbox"
+              checked={item.checked}
+              readOnly
+              aria-label={item.content.map((node) => node.text).join("")}
+            />
+            <InlineText nodes={item.content} />
+          </li>
+        ))}
+      </ul>
     );
-  }
-  return (
-    <p style={style}>
-      <bdi>{value}</bdi>
-    </p>
-  );
+  const items = block.content.map((item, index) => (
+    <li key={index}>
+      <InlineText nodes={item.content} />
+    </li>
+  ));
+  return block.type === "orderedList" ? <ol>{items}</ol> : <ul>{items}</ul>;
 }
 
 function FolderTree(props: {
@@ -869,210 +1065,6 @@ function FolderNode(props: {
   );
 }
 
-function TasksScreen(props: {
-  library: Library;
-  productivity: Productivity;
-  locale: "en" | "fa";
-}) {
-  const t = (key: MessageKey) => translate(props.locale, key);
-  const [title, setTitle] = useState("");
-  const [filter, setFilter] = useState<"open" | "done" | "all">("open");
-  const tasks = props.library.tasks.filter((task) =>
-    filter === "all" ? true : task.status === filter,
-  );
-  return (
-    <section className="card-glass content-card module" aria-label={t("nav.tasks")}>
-      <div className="page-header">
-        <div>
-          <span className="section-kicker">ORGANIZE / 02</span>
-          <h1>
-            {t("nav.tasks")} <span className="heading-star">✳</span>
-          </h1>
-        </div>
-      </div>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!title.trim()) return;
-          void props.productivity.createTask(title).then(() => setTitle(""));
-        }}
-      >
-        <label>
-          {t("capture.title")}
-          <input
-            className="field"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-        </label>
-        <button className="btn primary" type="submit">
-          {t("command.task")}
-        </button>
-      </form>
-      <div className="cluster">
-        {(["open", "done", "all"] as const).map((item) => (
-          <button
-            key={item}
-            className="btn"
-            type="button"
-            aria-pressed={filter === item}
-            onClick={() => setFilter(item)}
-          >
-            {t(`tasks.${item}`)}
-          </button>
-        ))}
-      </div>
-      <ul>
-        {tasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            locale={props.locale}
-            productivity={props.productivity}
-          />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function TaskCard(props: {
-  task: Library["tasks"][number];
-  locale: "en" | "fa";
-  productivity: Productivity;
-}) {
-  const t = (key: MessageKey) => translate(props.locale, key);
-  const [title, setTitle] = useState(props.task.title);
-  const [details, setDetails] = useState(props.task.details);
-  const [priority, setPriority] = useState(props.task.priority);
-  const [expected, setExpected] = useState(props.task.revision);
-  const [error, setError] = useState("");
-  async function save(
-    patch: Partial<
-      Pick<
-        Library["tasks"][number],
-        | "title"
-        | "details"
-        | "status"
-        | "priority"
-        | "dueDate"
-        | "eventId"
-        | "focusRank"
-      >
-    >,
-  ) {
-    try {
-      const saved = await props.productivity.saveTask(props.task.id, expected, {
-        title,
-        details,
-        priority,
-        ...patch,
-      });
-      setExpected(saved.revision);
-      setTitle(saved.title);
-      setDetails(saved.details);
-      setPriority(saved.priority);
-      setError("");
-    } catch {
-      setError(t("tasks.invalid"));
-    }
-  }
-  return (
-    <li>
-      <bdi>{props.task.title}</bdi>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save({ title, details, priority });
-        }}
-      >
-        <label>
-          {t("capture.title")}
-          <input
-            className="field"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-        </label>
-        <label>
-          {t("tasks.details")}
-          <textarea
-            className="field"
-            value={details}
-            onChange={(event) => setDetails(event.target.value)}
-          />
-        </label>
-        <label>
-          {t("tasks.priority")}
-          <select
-            className="select"
-            value={priority}
-            onChange={(event) =>
-              setPriority(Number(event.target.value) as 1 | 2 | 3)
-            }
-          >
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-          </select>
-        </label>
-        <button className="btn" type="submit">
-          {t("tasks.save")}
-        </button>
-      </form>
-      <button
-        className="btn"
-        type="button"
-        onClick={() =>
-          void save({ status: props.task.status === "done" ? "open" : "done" })
-        }
-      >
-        {props.task.status === "done" ? t("tasks.open") : t("tasks.done")}
-      </button>
-      <label>
-        {t("tasks.due")}
-        <input
-          className="field"
-          value={props.task.dueDate ?? ""}
-          onChange={(event) =>
-            void save({ dueDate: event.target.value || null })
-          }
-        />
-      </label>
-      <label>
-        {t("tasks.focus")}
-        <select
-          className="select"
-          value={props.task.focusRank ?? ""}
-          onChange={(event) =>
-            void save({
-              focusRank: event.target.value
-                ? (Number(event.target.value) as 1 | 2 | 3)
-                : null,
-            })
-          }
-        >
-          <option value="">{t("tasks.none")}</option>
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-        </select>
-      </label>
-      <label>
-        {t("tasks.event")}
-        <input
-          className="field"
-          value={props.task.eventId ?? ""}
-          onChange={(event) =>
-            void save({ eventId: event.target.value || null })
-          }
-        />
-      </label>
-      {error ? <p className="error">{error}</p> : null}
-    </li>
-  );
-}
-
 function BookmarksScreen(props: {
   library: Library;
   productivity: Productivity;
@@ -1080,6 +1072,7 @@ function BookmarksScreen(props: {
   locale: "en" | "fa";
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
+  const [query, setQuery] = useState("");
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("https://");
   const [error, setError] = useState("");
@@ -1095,13 +1088,19 @@ function BookmarksScreen(props: {
     (folder) => folder.scope === "localBookmarks",
   );
   useEffect(() => {
-    void props.productivity.readBrowser(props.bookmarks).then((result) => {
-      setAccess(result.access);
-      setTree(result.tree);
-    });
+    void props.productivity
+      .readBrowser(props.bookmarks)
+      .then((result) => {
+        setAccess(result.access);
+        setTree(result.tree);
+      })
+      .catch(() => setError(t("bookmarks.rejected")));
   }, [props.bookmarks, props.productivity]);
   const quick = useMemo(
-    () => props.library.bookmarks.filter((bookmark) => bookmark.quick),
+    () =>
+      props.library.bookmarks
+        .filter((bookmark) => bookmark.quick)
+        .sort((a, b) => a.sortOrder - b.sortOrder),
     [props.library.bookmarks],
   );
   return (
@@ -1117,6 +1116,15 @@ function BookmarksScreen(props: {
           </h1>
         </div>
       </div>
+      <label>
+        {t("notes.search")}
+        <input
+          className="field"
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </label>
       <h3>{t("bookmarks.local")}</h3>
       <div className="icon-grid">
         {quick.map((bookmark) => (
@@ -1189,17 +1197,37 @@ function BookmarksScreen(props: {
       </button>
       {error ? <p className="error">{error}</p> : null}
       <ul>
-        {props.library.bookmarks.map((bookmark) => (
-          <BookmarkRow
-            key={bookmark.id}
-            bookmark={bookmark}
-            folders={folders}
-            locale={props.locale}
-            armed={removeArmed === bookmark.id}
-            productivity={props.productivity}
-            onArm={() => setRemoveArmed(bookmark.id)}
-          />
-        ))}
+        {props.library.bookmarks
+          .filter(
+            (row) =>
+              (!folderId || row.folderId === folderId) &&
+              searchFold(`${row.title} ${row.url}`).includes(searchFold(query)),
+          )
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((bookmark) => (
+            <BookmarkRow
+              key={bookmark.id}
+              bookmark={bookmark}
+              folders={folders}
+              locale={props.locale}
+              armed={removeArmed === bookmark.id}
+              productivity={props.productivity}
+              onArm={() => setRemoveArmed(bookmark.id)}
+              onMove={(direction) => {
+                const rows = [...props.library.bookmarks].sort(
+                  (a, b) => a.sortOrder - b.sortOrder,
+                );
+                const index = rows.findIndex((row) => row.id === bookmark.id);
+                const other = rows[index + direction];
+                if (!other) return;
+                rows[index + direction] = bookmark;
+                rows[index] = other;
+                void props.productivity
+                  .reorderBookmarks(rows)
+                  .catch(() => setError(t("bookmarks.rejected")));
+              }}
+            />
+          ))}
       </ul>
       <FolderTree
         folders={folders}
@@ -1282,7 +1310,35 @@ function BookmarksScreen(props: {
                 }),
               )
               .then(() => props.productivity.readBrowser(props.bookmarks))
-              .then((next) => setTree(next.tree))
+              .then((next) => {
+                setTree(next.tree);
+                setAccess(next.access);
+              })
+              .catch(() => setError(t("bookmarks.rejected")))
+          }
+          onUpdate={(id, title, url, confirmed) =>
+            void props.productivity
+              .changeBrowser(props.bookmarks, confirmed, () =>
+                props.bookmarks.update(id, { title, ...(url ? { url } : {}) }),
+              )
+              .then(() => props.productivity.readBrowser(props.bookmarks))
+              .then((next) => {
+                setTree(next.tree);
+                setAccess(next.access);
+              })
+              .catch(() => setError(t("bookmarks.rejected")))
+          }
+          onMove={(id, parentId, confirmed) =>
+            void props.productivity
+              .changeBrowser(props.bookmarks, confirmed, () =>
+                props.bookmarks.move(id, parentId),
+              )
+              .then(() => props.productivity.readBrowser(props.bookmarks))
+              .then((next) => {
+                setTree(next.tree);
+                setAccess(next.access);
+              })
+              .catch(() => setError(t("bookmarks.rejected")))
           }
           onRemove={(id, confirmed) =>
             void props.productivity
@@ -1290,7 +1346,11 @@ function BookmarksScreen(props: {
                 props.bookmarks.remove(id),
               )
               .then(() => props.productivity.readBrowser(props.bookmarks))
-              .then((next) => setTree(next.tree))
+              .then((next) => {
+                setTree(next.tree);
+                setAccess(next.access);
+              })
+              .catch(() => setError(t("bookmarks.rejected")))
           }
         />
       ) : null}
@@ -1305,7 +1365,28 @@ function BookmarksScreen(props: {
             new Date().toISOString(),
             () => crypto.randomUUID(),
           );
-          void props.productivity.replaceSnapshots(rows);
+          void props.productivity
+            .replaceSnapshots(rows)
+            .then(() => {
+              const href = URL.createObjectURL(
+                new Blob(
+                  [
+                    JSON.stringify(
+                      { format: "venus-bookmarks-snapshot", version: 1, rows },
+                      null,
+                      2,
+                    ),
+                  ],
+                  { type: "application/json" },
+                ),
+              );
+              const link = document.createElement("a");
+              link.href = href;
+              link.download = "venus-bookmarks-snapshot.json";
+              link.click();
+              window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+            })
+            .catch(() => setError(t("bookmarks.rejected")));
         }}
       >
         {t("bookmarks.export")}
@@ -1329,6 +1410,7 @@ function BookmarkRow(props: {
   armed: boolean;
   productivity: Productivity;
   onArm: () => void;
+  onMove: (direction: -1 | 1) => void;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
   const [title, setTitle] = useState(props.bookmark.title);
@@ -1339,6 +1421,24 @@ function BookmarkRow(props: {
   const [error, setError] = useState("");
   return (
     <li>
+      <div className="cluster">
+        <button
+          className="btn"
+          type="button"
+          aria-label={t("repair.up")}
+          onClick={() => props.onMove(-1)}
+        >
+          ↑
+        </button>
+        <button
+          className="btn"
+          type="button"
+          aria-label={t("repair.down")}
+          onClick={() => props.onMove(1)}
+        >
+          ↓
+        </button>
+      </div>
       <span className="muted">{t("bookmarks.sourceVenus")}</span>
       <a href={props.bookmark.url}>
         <bdi>{props.bookmark.title}</bdi>
@@ -1417,7 +1517,9 @@ function BookmarkRow(props: {
         type="button"
         disabled={!props.armed}
         onClick={() =>
-          void props.productivity.deleteBookmark(props.bookmark.id)
+          void props.productivity
+            .deleteBookmark(props.bookmark.id, props.bookmark.revision)
+            .catch(() => setError(t("bookmarks.rejected")))
         }
       >
         {t("edit.remove")}
@@ -1436,8 +1538,12 @@ function BrowserTree(props: {
       {props.nodes.map((node) => (
         <li key={node.id}>
           <span className="muted">{t("bookmarks.sourceBrowser")}</span>
-          {node.url ? (
-            <a href={node.url}>
+          {safeBookmarkUrl(node.url) ? (
+            <a
+              href={safeBookmarkUrl(node.url)!}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <bdi>{node.title}</bdi>
             </a>
           ) : (
@@ -1452,6 +1558,14 @@ function BrowserTree(props: {
   );
 }
 
+function safeBookmarkUrl(value?: string) {
+  if (!value) return null;
+  try {
+    return canonicalHttpUrl(value);
+  } catch {
+    return null;
+  }
+}
 function BrowserEditor(props: {
   locale: "en" | "fa";
   nodes: BrowserBookmarkNode[];
@@ -1464,20 +1578,89 @@ function BrowserEditor(props: {
     confirmed: boolean,
   ) => void;
   onRemove: (id: string, confirmed: boolean) => void;
+  onUpdate: (
+    id: string,
+    title: string,
+    url: string,
+    confirmed: boolean,
+  ) => void;
+  onMove: (id: string, parentId: string, confirmed: boolean) => void;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
+  const [selected, setSelected] = useState("");
+  const [parent, setParent] = useState("");
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  const rows: BrowserBookmarkNode[] = [];
+  function walk(nodes: BrowserBookmarkNode[]) {
+    for (const node of nodes) {
+      rows.push(node);
+      walk(node.children ?? []);
+    }
+  }
+  walk(props.nodes);
+  // Exclude the synthetic browser root and built-in containers from destructive editing.
+  const editable = rows.filter(
+    (node) =>
+      !props.nodes.some((root) => root.id === node.id) &&
+      !props.nodes.some((root) =>
+        root.children?.some((child) => child.id === node.id),
+      ),
+  );
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        props.onCreate(null, title, url, confirmed);
+        props.onCreate(parent || null, title, url, confirmed);
       }}
     >
       <p>{t("bookmarks.confirmHelp")}</p>
       <label>
+        {t("bookmarks.target")}
+        <select
+          className="select"
+          value={selected}
+          onChange={(event) => {
+            const id = event.target.value;
+            setSelected(id);
+            props.onConfirm("");
+            const node = editable.find((row) => row.id === id);
+            setTitle(node?.title ?? "");
+            setUrl(node?.url ?? "");
+          }}
+        >
+          <option value="">{t("bookmarks.createBrowser")}</option>
+          {editable.map((node) => (
+            <option key={node.id} value={node.id}>
+              {node.title || node.id}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {t("bookmarks.folder")}
+        <select
+          className="select"
+          value={parent}
+          onChange={(event) => setParent(event.target.value)}
+        >
+          <option value="">{t("notes.moveRoot")}</option>
+          {rows
+            .filter(
+              (row) =>
+                !row.url &&
+                row.id !== selected &&
+                !props.nodes.some((root) => root.id === row.id),
+            )
+            .map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.title || row.id}
+              </option>
+            ))}
+        </select>
+      </label>
+      <label className="cluster">
         <input
           type="checkbox"
           checked={confirmed}
@@ -1490,6 +1673,7 @@ function BrowserEditor(props: {
         <input
           className="field"
           value={title}
+          required
           onChange={(event) => setTitle(event.target.value)}
         />
       </label>
@@ -1501,34 +1685,51 @@ function BrowserEditor(props: {
           onChange={(event) => setUrl(event.target.value)}
         />
       </label>
-      <button className="btn" type="submit" disabled={!confirmed}>
-        {t("bookmarks.createBrowser")}
-      </button>
-      {props.nodes[0] ? (
+      <div className="cluster">
+        <button
+          className="btn"
+          type="submit"
+          disabled={!confirmed || !title.trim()}
+        >
+          {t("bookmarks.createBrowser")}
+        </button>
         <button
           className="btn"
           type="button"
-          disabled={props.confirmId !== props.nodes[0].id}
+          disabled={!confirmed || !selected || !title.trim()}
+          onClick={() => props.onUpdate(selected, title, url, confirmed)}
+        >
+          {t("bookmarks.save")}
+        </button>
+        <button
+          className="btn"
+          type="button"
+          disabled={!confirmed || !selected || !parent}
+          onClick={() => props.onMove(selected, parent, confirmed)}
+        >
+          {t("bookmarks.move")}
+        </button>
+        <button
+          className="btn"
+          type="button"
+          disabled={!selected}
+          onClick={() => props.onConfirm(selected)}
+        >
+          {t("bookmarks.confirmDelete")}
+        </button>
+        <button
+          className="btn"
+          type="button"
+          disabled={!confirmed || !selected || props.confirmId !== selected}
           onClick={() => {
-            const node = props.nodes[0];
-            if (node) props.onRemove(node.id, true);
+            props.onRemove(selected, true);
+            props.onConfirm("");
+            setSelected("");
           }}
         >
           {t("bookmarks.deleteBrowser")}
         </button>
-      ) : null}
-      {props.nodes[0] ? (
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            const node = props.nodes[0];
-            if (node) props.onConfirm(node.id);
-          }}
-        >
-          {t("bookmarks.confirmDelete")}
-        </button>
-      ) : null}
+      </div>
     </form>
   );
 }

@@ -18,6 +18,7 @@ import {
   type FolderRecord,
   type LocalBookmarkRecord,
   type NoteRecord,
+  type NoteDraft,
   type TaskRecord,
 } from "../../src/domain/productivity";
 import {
@@ -59,6 +60,7 @@ function database(): ProductivityDatabase {
   const bookmarkSnapshots = table<BookmarkSnapshotRecord>();
   return {
     notes,
+    noteDrafts: table<NoteDraft>(),
     folders,
     tasks,
     localBookmarks,
@@ -295,6 +297,7 @@ describe("P02 productivity records", () => {
       dueDate: null,
       eventId: null,
       focusRank: null,
+      completedAt: null,
       revision: 1,
       createdAt: stamp,
       updatedAt: stamp,
@@ -347,7 +350,7 @@ describe("P02 productivity records", () => {
         title: "GitHub",
         url: "https://github.com/",
         folderId: null,
-        tags: [],
+        sortOrder: 0,
         quick: false,
         iconLabel: null,
         revision: 1,
@@ -359,7 +362,7 @@ describe("P02 productivity records", () => {
         title: "Docs",
         url: "https://example.com/",
         folderId: null,
-        tags: [],
+        sortOrder: 0,
         quick: true,
         iconLabel: null,
         revision: 1,

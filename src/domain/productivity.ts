@@ -112,6 +112,7 @@ export const noteSchema = z
     ),
     folderId: z.string().uuid().nullable(),
     tags: z.array(z.string().min(1).max(40)).max(16),
+    sortIndex: z.number().int().optional(),
     pinned: z.boolean(),
     archived: z.boolean(),
     trashedAt: z.string().nullable(),
@@ -123,6 +124,23 @@ export const taskSchema = z
     title: z.string().min(1).max(titleLimit),
     details: z.string().max(textLimit),
     status: z.enum(["open", "done"]),
+    column: z.enum(["todo", "doing", "done"]).optional(),
+    sortIndex: z.number().int().optional(),
+    today: z.boolean().optional(),
+    todayOrder: z.number().int().optional(),
+    labels: z.array(z.string().min(1).max(40)).max(16).optional(),
+    checklist: z
+      .array(
+        z
+          .object({
+            id: z.string().uuid(),
+            text: z.string().min(1).max(500),
+            done: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(100)
+      .optional(),
     priority: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     dueDate: z
       .string()
@@ -233,31 +251,101 @@ export function applyBlockLink(
 }
 
 export function replaceBlockText(block: NoteBlock, text: string): NoteBlock {
-  const source =
-    block.type === "paragraph" || block.type === "heading"
-      ? block.content[0]
-      : block.content[0]?.content[0];
-  const marks = source?.marks;
-  const node: NoteText = { type: "text", text };
-  if (marks) node.marks = marks;
-  const content = text ? [node] : [];
+  function nodes(value: string, previous: NoteText[] = []): NoteText[] {
+    const marks = previous[0]?.marks;
+    return value
+      ? [{ type: "text", text: value, ...(marks ? { marks } : {}) }]
+      : [];
+  }
   if (block.type === "paragraph" || block.type === "heading")
-    return { ...block, content };
-  if (block.type === "taskList") {
+    return { ...block, content: nodes(text, block.content) };
+  const lines = text.split("\n");
+  if (block.type === "taskList")
     return {
       ...block,
-      content: [
-        {
-          type: "taskItem",
-          checked: block.content[0]?.checked ?? false,
-          content,
-        },
-      ],
+      content: lines.map((line, index) => ({
+        type: "taskItem",
+        checked: block.content[index]?.checked ?? false,
+        content: nodes(line, block.content[index]?.content),
+      })),
     };
+  return {
+    ...block,
+    content: lines.map((line, index) => ({
+      type: "listItem",
+      content: nodes(line, block.content[index]?.content),
+    })),
+  };
+}
+
+export function toggleBlockMark(
+  block: NoteBlock,
+  mark: "bold" | "italic",
+): NoteBlock {
+  const all =
+    block.type === "paragraph" || block.type === "heading"
+      ? block.content
+      : block.content.flatMap((item) => item.content);
+  const remove =
+    all.length > 0 &&
+    all.every((node) => node.marks?.some((item) => item.type === mark));
+  const nodes = (values: NoteText[]) =>
+    values.map((node) => ({
+      ...node,
+      marks: remove
+        ? (node.marks ?? []).filter((item) => item.type !== mark)
+        : [
+            ...(node.marks ?? []).filter((item) => item.type !== mark),
+            { type: mark },
+          ],
+    }));
+  if (block.type === "paragraph" || block.type === "heading")
+    return { ...block, content: nodes(block.content) };
+  if (block.type === "taskList")
+    return {
+      ...block,
+      content: block.content.map((item) => ({
+        ...item,
+        content: nodes(item.content),
+      })),
+    };
+  return {
+    ...block,
+    content: block.content.map((item) => ({
+      ...item,
+      content: nodes(item.content),
+    })),
+  };
+}
+
+export function convertBlock(
+  block: NoteBlock,
+  type: NoteBlock["type"],
+): NoteBlock {
+  if (type === block.type) return block;
+  const rows =
+    block.type === "paragraph" || block.type === "heading"
+      ? [block.content]
+      : block.content.map((item) => item.content);
+  if (type === "paragraph" || type === "heading") {
+    const content = rows.flatMap((row, index) =>
+      index === 0 ? row : [{ type: "text" as const, text: "\n" }, ...row],
+    );
+    return type === "heading" ? { type, level: 2, content } : { type, content };
   }
-  if (block.type === "bulletList" || block.type === "orderedList")
-    return { ...block, content: [{ type: "listItem", content }] };
-  return block;
+  if (type === "taskList")
+    return {
+      type,
+      content: rows.map((content) => ({
+        type: "taskItem",
+        checked: false,
+        content,
+      })),
+    };
+  return {
+    type,
+    content: rows.map((content) => ({ type: "listItem", content })),
+  };
 }
 
 export function plainText(document: NoteDocument) {
@@ -357,7 +445,10 @@ export function descendantIds(
   const ids = [id];
   for (let index = 0; index < ids.length; index += 1) {
     for (const folder of folders) {
-      if (folder.parentId === ids[index]) ids.push(folder.id);
+      if (folder.parentId === ids[index]) {
+        if (ids.includes(folder.id)) throw new WorkspaceError("invalidInput");
+        ids.push(folder.id);
+      }
     }
   }
   return ids;
@@ -387,10 +478,9 @@ export function optionalEventId(value: string | null) {
 }
 
 export function normalizeTags(tags: string[]) {
-  const next = tags
-    .map((tag) => tag.trim())
-    .filter(Boolean)
-    .slice(0, 16);
+  const next = [
+    ...new Set(tags.map((tag) => tag.trim()).filter(Boolean)),
+  ].slice(0, 16);
   if (next.some((tag) => tag.length > 40))
     throw new WorkspaceError("invalidInput");
   return next;
@@ -472,6 +562,10 @@ export function focusTasks(tasks: TaskRecord[]) {
 
 /** Dashboard Today widget: prefer Top Three focus, else open tasks by priority. */
 export function previewTodayTasks(tasks: TaskRecord[]) {
+  const today = tasks
+    .filter((task) => task.today)
+    .sort((a, b) => (a.todayOrder ?? 0) - (b.todayOrder ?? 0));
+  if (today.length) return today;
   const focus = focusTasks(tasks);
   if (focus.length > 0) return focus;
   return tasks
@@ -490,17 +584,17 @@ export function previewNotes(notes: NoteRecord[], limit = 2) {
     .sort(
       (a, b) =>
         Number(b.pinned) - Number(a.pinned) ||
+        (a.sortIndex ?? 0) - (b.sortIndex ?? 0) ||
         b.updatedAt.localeCompare(a.updatedAt),
     )
     .slice(0, limit);
 }
 
 /** Dashboard quick links: marked quick first, else recent bookmarks. */
-export function previewQuickLinks(
-  bookmarks: LocalBookmarkRecord[],
-  limit = 6,
-) {
-  const quick = bookmarks.filter((bookmark) => bookmark.quick);
+export function previewQuickLinks(bookmarks: LocalBookmarkRecord[], limit = 6) {
+  const quick = bookmarks
+    .filter((bookmark) => bookmark.quick)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
   if (quick.length > 0) return quick.slice(0, limit);
   return [...bookmarks]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -547,4 +641,31 @@ export function iconFallback(title: string, iconLabel: string | null) {
   if (chosen) return chosen;
   const first = Array.from(title.trim())[0];
   return first || "?";
+}
+
+export type TaskColumn = "todo" | "doing" | "done";
+export function taskColumn(task: TaskRecord): TaskColumn {
+  return task.status === "done"
+    ? "done"
+    : task.column === "doing"
+      ? "doing"
+      : "todo";
+}
+export function sortedTasks(tasks: TaskRecord[]) {
+  return [...tasks].sort(
+    (a, b) =>
+      (a.sortIndex ?? 0) - (b.sortIndex ?? 0) ||
+      a.createdAt.localeCompare(b.createdAt) ||
+      a.id.localeCompare(b.id),
+  );
+}
+
+export interface NoteDraft {
+  id: string;
+  noteId: string;
+  expectedRevision: number;
+  title: string;
+  body: NoteDocument;
+  tags: string[];
+  updatedAt: string;
 }

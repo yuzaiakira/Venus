@@ -76,6 +76,7 @@ export function createWorkspace(
   }
   async function writeBootstrap(next: Bootstrap) {
     const parsed = BootstrapSchema.parse(next);
+    new Intl.DateTimeFormat("en", { timeZone: parsed.timeZone }).format(0);
     await preferences.set(bootstrapKey, parsed);
     notify({
       type: "workspace",
@@ -95,20 +96,40 @@ export function createWorkspace(
     return { bootstrap, profiles, widgets, shared };
   }
   async function ensureWorkspace() {
-    const count = await db.profiles.count();
-    if (count > 0) {
-      const bootstrap = await readBootstrap();
-      const selected = await db.profiles.get(bootstrap.selectedProfileId);
-      if (!selected) {
-        const first = await db.profiles.orderBy("updatedAt").first();
-        if (first)
-          await writeBootstrap({ ...bootstrap, selectedProfileId: first.id });
-      }
-      return;
-    }
-    const profile = await createProfile("minimal", "Minimal");
+    // Read and create in the same transaction: two fresh tabs must not seed
+    // duplicate default profiles when startup subscriptions run together.
+    const created = await db.transaction(
+      "rw",
+      db.profiles,
+      db.widgets,
+      async () => {
+        if (await db.profiles.count()) return null;
+        const profile: ProfileRecord = {
+          id: crypto.randomUUID(),
+          title: "Minimal",
+          preset: "minimal",
+          themeMode: null,
+          wallpaper: null,
+          blurPx: null,
+          glassAlpha: null,
+          accent: null,
+          ...stamp(),
+        };
+        await db.profiles.add(profile);
+        await db.widgets.bulkAdd(
+          layoutFor("minimal").map((item) => widgetFrom(profile.id, item)),
+        );
+        return profile;
+      },
+    );
     const bootstrap = await readBootstrap();
-    await writeBootstrap({ ...bootstrap, selectedProfileId: profile.id });
+    if (!(await db.profiles.get(bootstrap.selectedProfileId))) {
+      const first = await db.profiles.orderBy("updatedAt").first();
+      if (first)
+        await writeBootstrap({ ...bootstrap, selectedProfileId: first.id });
+    }
+    if (created)
+      notify({ type: "workspace", id: created.id, revision: created.revision });
   }
   async function createProfile(
     preset: Exclude<Preset, "custom">,

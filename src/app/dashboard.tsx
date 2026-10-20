@@ -1,5 +1,8 @@
+import { TaskDialog } from "./tasks";
 import {
   useEffect,
+  useCallback,
+  useRef,
   useMemo,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -27,11 +30,11 @@ import {
   widgetTypes,
 } from "../domain/dashboard";
 import {
-  filterCommands,
+  searchPalette,
   permissionNoteKey,
   type PaletteCommand,
 } from "../domain/commands";
-import { searchLibrary } from "../domain/productivity";
+import { canonicalHttpUrl, searchLibrary } from "../domain/productivity";
 import { translate, type MessageKey } from "../locales/messages";
 import type { createCalendar } from "../application/calendar";
 import type { PluginPlatform } from "../application/plugins";
@@ -65,6 +68,34 @@ export function DashboardScreen(props: {
   plugins: PluginPlatform;
   online: boolean;
 }) {
+  const [online, setOnline] = useState(props.online);
+  const [systemAppearance, setSystemAppearance] = useState({
+    dark: false,
+    reduced: false,
+  });
+  useEffect(() => {
+    const dark = window.matchMedia("(prefers-color-scheme: dark)");
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const change = () =>
+      setSystemAppearance({ dark: dark.matches, reduced: reduced.matches });
+    const connectivity = () => setOnline(navigator.onLine);
+    change();
+    dark.addEventListener("change", change);
+    reduced.addEventListener("change", change);
+    window.addEventListener("online", connectivity);
+    window.addEventListener("offline", connectivity);
+    return () => {
+      dark.removeEventListener("change", change);
+      reduced.removeEventListener("change", change);
+      window.removeEventListener("online", connectivity);
+      window.removeEventListener("offline", connectivity);
+    };
+  }, []);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskDialogId, setTaskDialogId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const loadSequence = useRef(0);
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [library, setLibrary] = useState<Library | null>(null);
   const [view, setView] = useState<
@@ -86,6 +117,7 @@ export function DashboardScreen(props: {
     timeZone: "UTC",
   });
   const [activeTimer, setActiveTimer] = useState<TimerRecord | null>(null);
+  const [captureToday, setCaptureToday] = useState(false);
   const [captureKind, setCaptureKind] = useState<"note" | "task" | "event">(
     "note",
   );
@@ -95,7 +127,11 @@ export function DashboardScreen(props: {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const [notice, setNotice] = useState("");
-  const [bell, setBell] = useState(false);
+  const [bell, setBell] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.location.hash === "#notifications",
+  );
   const [capture, setCapture] = useState(false);
   const [columns, setColumns] = useState(logicalColumns);
   const [now, setNow] = useState(() => new Date());
@@ -105,19 +141,33 @@ export function DashboardScreen(props: {
   const [fabOpen, setFabOpen] = useState(false);
   const [profileMenu, setProfileMenu] = useState(false);
 
-  async function reload() {
-    setSnapshot(await props.workspace.load());
-    setLibrary(await props.productivity.load());
-    const schedule = await props.calendar.list();
-    setEvents(schedule.events);
-    setReminders(schedule.notifications);
-    setQuiet(schedule.quietHours);
-    setActiveTimer(
-      schedule.timers.find(
-        (item) => item.status === "running" || item.status === "paused",
-      ) ?? null,
-    );
-  }
+  const reload = useCallback(async () => {
+    const sequence = ++loadSequence.current;
+    try {
+      const [next, content, schedule] = await Promise.all([
+        props.workspace.load(),
+        props.productivity.load(),
+        props.calendar.list(),
+      ]);
+      if (sequence !== loadSequence.current) return;
+      setSnapshot(next);
+      setLibrary(content);
+      setEvents(schedule.events);
+      setReminders(schedule.notifications);
+      setQuiet(schedule.quietHours);
+      const latestTimer = [...schedule.timers].sort(
+        (a, b) => (b.startedAtUTC ?? 0) - (a.startedAtUTC ?? 0),
+      )[0];
+      setActiveTimer(
+        schedule.timers.find(
+          (item) => item.status === "running" || item.status === "paused",
+        ) ?? (latestTimer?.status === "finished" ? latestTimer : null),
+      );
+      setLoadError(false);
+    } catch {
+      if (sequence === loadSequence.current) setLoadError(true);
+    }
+  }, [props.workspace, props.productivity, props.calendar]);
   async function completeOnboarding() {
     const bootstrap = await props.workspace.updatePreferences({
       onboardingComplete: true,
@@ -125,22 +175,31 @@ export function DashboardScreen(props: {
     setSnapshot((current) => (current ? { ...current, bootstrap } : current));
   }
   useEffect(() => {
-    let active = true;
-    void props.workspace.load().then((next) => {
-      if (!active) return;
-      setSnapshot(next);
-    });
-    void props.productivity.load().then((next) => {
-      if (active) setLibrary(next);
-    });
-    const unsubscribe = props.workspace.subscribe(() => {
-      if (active) void reload();
-    });
+    void reload();
+    const unsubscribe = props.workspace.subscribe(() => void reload());
     return () => {
-      active = false;
+      ++loadSequence.current;
       unsubscribe();
     };
-  }, [props.workspace, props.productivity]);
+  }, [props.workspace, reload]);
+  useEffect(() => {
+    if (
+      !activeTimer ||
+      activeTimer.status !== "running" ||
+      !activeTimer.endsAtUTC
+    )
+      return;
+    const handle = window.setTimeout(
+      () => {
+        void props.calendar
+          .reconcile(false)
+          .then(reload)
+          .catch(() => setLoadError(true));
+      },
+      Math.min(2_147_483_647, Math.max(0, activeTimer.endsAtUTC - Date.now())),
+    );
+    return () => window.clearTimeout(handle);
+  }, [activeTimer, props.calendar, reload]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(timer);
@@ -164,9 +223,8 @@ export function DashboardScreen(props: {
       blurPx: appearance.blurPx,
       glassAlpha: appearance.glassAlpha,
       accent: appearance.accent,
-      prefersDark: window.matchMedia("(prefers-color-scheme: dark)").matches,
-      reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)")
-        .matches,
+      prefersDark: systemAppearance.dark,
+      reducedMotion: systemAppearance.reduced,
     });
     if (appearance.wallpaper.kind !== "upload") return;
     let revoke = () => {};
@@ -181,7 +239,7 @@ export function DashboardScreen(props: {
       active = false;
       revoke();
     };
-  }, [snapshot, props.workspace]);
+  }, [snapshot, props.workspace, systemAppearance]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const meta = event.ctrlKey || event.metaKey;
@@ -219,16 +277,15 @@ export function DashboardScreen(props: {
         moduleEnabled(snapshot.bootstrap, widget.widgetType),
     );
   }, [snapshot, profile, editing]);
-  const display = reflow(
-    widgets.map((widget) => ({
-      id: widget.id,
-      x: widget.x,
-      y: widget.y,
-      w: widget.w,
-      h: widget.h,
-    })),
-    editing ? logicalColumns : columns,
-  );
+  const placements = widgets.map((widget) => ({
+    id: widget.id,
+    x: widget.x,
+    y: widget.y,
+    w: widget.w,
+    h: widget.h,
+  }));
+  const display =
+    columns === logicalColumns ? placements : reflow(placements, columns);
   const commands = useMemo(() => {
     if (!snapshot) return [];
     const local: PaletteCommand[] = [
@@ -264,7 +321,7 @@ export function DashboardScreen(props: {
         id: "web",
         label: t("search.submit"),
         group: "web",
-        available: props.online,
+        available: online,
         profileId: "",
       },
       {
@@ -317,8 +374,12 @@ export function DashboardScreen(props: {
         profileId: "",
       },
     ];
-    return filterCommands(local, query);
-  }, [snapshot, query, props.online, t]);
+    return searchPalette(
+      local,
+      library ?? { notes: [], tasks: [], bookmarks: [] },
+      query,
+    );
+  }, [snapshot, library, query, online, t]);
 
   if (!snapshot || !profile) {
     return (
@@ -328,6 +389,18 @@ export function DashboardScreen(props: {
         </div>
         <main className="workspace">
           <h1>{t("app.title")}</h1>
+          {loadError ? (
+            <div role="alert">
+              <p>{t("settings.error")}</p>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => void reload()}
+              >
+                {t("repair.retry")}
+              </button>
+            </div>
+          ) : null}
         </main>
       </div>
     );
@@ -337,7 +410,11 @@ export function DashboardScreen(props: {
   const clock = formatClock(now, snapshot.bootstrap);
   const navItems = [
     { id: "home" as const, icon: "grid" as const, label: t("nav.home") },
-    { id: "tasks" as const, icon: "checkCircle" as const, label: t("nav.tasks") },
+    {
+      id: "tasks" as const,
+      icon: "checkCircle" as const,
+      label: t("nav.tasks"),
+    },
     { id: "notes" as const, icon: "note" as const, label: t("nav.notes") },
     {
       id: "calendar" as const,
@@ -413,17 +490,45 @@ export function DashboardScreen(props: {
       setNotice(t("capture.later"));
       return;
     }
+    if (command.id.startsWith("open-note:")) {
+      setSelectedNoteId(command.id.slice("open-note:".length));
+      setView("notes");
+    }
+    if (command.id.startsWith("open-task:")) {
+      setSelectedTaskId(command.id.slice("open-task:".length));
+      setView("tasks");
+    }
+    if (command.id.startsWith("open-bookmark:")) {
+      const bookmark = library?.bookmarks.find(
+        (item) => item.id === command.id.slice("open-bookmark:".length),
+      );
+      if (bookmark) {
+        try {
+          window.open(
+            canonicalHttpUrl(bookmark.url),
+            "_blank",
+            "noopener,noreferrer",
+          );
+        } catch {
+          setNotice(t("bookmarks.rejected"));
+        }
+      }
+    }
     if (command.id === "settings") setView("settings");
     if (command.id === "edit") setEditing((value) => !value);
     if (command.id === "search") {
       setView("home");
-      document.getElementById("dashboard-search")?.focus();
+      window.setTimeout(
+        () => document.getElementById("dashboard-search")?.focus(),
+        0,
+      );
     }
     if (
       command.id === "note" ||
       command.id === "task" ||
       command.id === "event"
     ) {
+      setCaptureToday(false);
       setCaptureKind(command.id);
       setCapture(true);
     }
@@ -448,7 +553,18 @@ export function DashboardScreen(props: {
     if (command.profileId)
       await props.workspace.switchProfile(command.profileId);
     if (command.id === "web") {
-      if (!props.online) setNotice(t("search.offline"));
+      if (!online) setNotice(t("search.offline"));
+      else if (query.trim()) {
+        try {
+          window.open(
+            webSearchUrl(searchTemplate(snapshot!.bootstrap), query),
+            "_blank",
+            "noopener,noreferrer",
+          );
+        } catch {
+          setNotice(t("search.invalid"));
+        }
+      }
     }
     setPalette(false);
   }
@@ -597,422 +713,504 @@ export function DashboardScreen(props: {
           </header>
 
           <div className="workspace-main">
-      {bell ? (
-        <NotificationCenter
-          locale={snapshot.bootstrap.locale}
-          rows={reminders}
-          quiet={quiet}
-          timer={activeTimer}
-          calendar={props.calendar}
-          onChanged={reload}
-        />
-      ) : null}
-      {localQuery ? (
-        <section className="glass" aria-label={t("search.results")}>
-          <h2>{t("search.results")}</h2>
-          <p className="muted">{t("search.local")}</p>
-          <ul>
-            {searchLibrary(
-              {
-                notes: library?.notes ?? [],
-                tasks: library?.tasks ?? [],
-                bookmarks: library?.bookmarks ?? [],
-                commands: commands.map((command) => ({
-                  id: command.id,
-                  label: command.label,
-                })),
-              },
-              localQuery,
-            )
-              .slice(0, 20)
-              .map((hit) => (
-                <li key={`${hit.kind}:${hit.id}`}>
-                  <bdi>{hit.title}</bdi>
-                  <span className="muted">{hit.kind}</span>
-                </li>
-              ))}
-          </ul>
-        </section>
-      ) : null}
-      {view === "settings" ? (
-        <SettingsScreen workspace={props.workspace} />
-      ) : null}
-      {view === "plugins" ? (
-        <PluginStudio
-          platform={props.plugins}
-          profileId={
-            snapshot.profiles.find(
-              (item) => item.id === snapshot.bootstrap.selectedProfileId,
-            )?.id ?? ""
-          }
-          locale={snapshot.bootstrap.locale}
-          now={now}
-          onChanged={() => void reload()}
-        />
-      ) : null}
-      {view === "calendar" ? (
-        <CalendarPanel
-          bootstrap={snapshot.bootstrap}
-          events={events}
-          calendar={props.calendar}
-          onChanged={reload}
-        />
-      ) : null}
-      {view === "home" ? (
-        <>
-          <section className="hero card-glass" aria-label={t("nav.home")}>
-            <div className="hero-text">
-              <div className="eyebrow">
-                <span className="eyebrow-star" aria-hidden="true">
-                  ✦
-                </span>
-                <span>{t("hero.eyebrow")}</span>
-                <span className="eyebrow-line" aria-hidden="true" />
-              </div>
-              <h1>
-                <span>{t("hero.first")}</span>
-                <br />
-                <em>{t("hero.second")}</em>
-              </h1>
-              <p className="hero-desc">{t("hero.desc")}</p>
-              <form
-                className="hero-search"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const data = new FormData(event.currentTarget);
-                  setLocalQuery(String(data.get("q") ?? ""));
-                }}
-              >
-                <Icon name="search" />
-                <input
-                  id="dashboard-search"
-                  name="q"
-                  type="search"
-                  aria-label={t("search.label")}
-                  placeholder={t("search.placeholder")}
-                  defaultValue={localQuery}
-                />
-                <kbd>Ctrl K</kbd>
-              </form>
-              <p className="muted" style={{ marginTop: "1rem", fontSize: 11 }}>
-                {t("home.heading")}
+            {loadError ? (
+              <p className="error" role="alert">
+                {t("settings.error")}
               </p>
-            </div>
-            <div className="hero-art" aria-hidden="true">
-              <div className="hero-orbit orbit-outer" />
-              <div className="hero-orbit orbit-mid" />
-              <div className="hero-orbit orbit-inner" />
-              <div className="hero-planet" />
-              <i className="satellite sat-a" />
-              <i className="satellite sat-b" />
-              <div className="clock-stack">
-                <span className="clock-label">{t("hero.localTime")}</span>
-                <div className="hero-clock">{clock.time}</div>
-                <span className="clock-date">
-                  {clock.dates[0] ?? clock.dates.join(" · ")}
-                </span>
-              </div>
-            </div>
-          </section>
-
-          <div className="section-heading">
-            <div>
-              <span className="section-kicker">{t("hero.overviewKicker")}</span>
-              <h2>{t("hero.overview")}</h2>
-            </div>
+            ) : null}
             <button
-              className="text-btn"
+              className="btn mobile-settings"
               type="button"
-              onClick={() => setEditing((value) => !value)}
+              onClick={() => setView("settings")}
             >
-              <Icon name="sliders" />
-              <span>{editing ? t("nav.done") : t("hero.customize")}</span>
+              {t("nav.settings")}
             </button>
-          </div>
-        </>
-      ) : null}
-      {library &&
-      view !== "home" &&
-      view !== "calendar" &&
-      view !== "plugins" &&
-      view !== "settings" ? (
-        <LibraryScreen
-          view={view}
-          library={library}
-          productivity={props.productivity}
-          bookmarks={props.bookmarks}
-          locale={snapshot.bootstrap.locale}
-        />
-      ) : null}
-      {view === "home" ? (
-        <>
-          <div
-            className="grid"
-            style={{
-              ["--columns" as string]: editing ? logicalColumns : columns,
-            }}
-          >
-            {widgets.map((widget) => {
-              const box =
-                display.find((item) => item.id === widget.id) ?? widget;
-              const openModule =
-                widget.widgetType === "notes"
-                  ? () => setView("notes")
-                  : widget.widgetType === "today"
-                    ? () => setView("tasks")
-                    : widget.widgetType === "upcoming"
-                      ? () => setView("calendar")
-                      : widget.widgetType === "bookmarks"
-                        ? () => setView("bookmarks")
-                        : undefined;
-              return (
-                <article
-                  key={widget.id}
-                  className="card-glass widget"
-                  data-hidden={widget.visible ? "false" : "true"}
-                  style={{
-                    gridColumn: `span ${box.w}`,
-                    gridRow: `span ${box.h}`,
-                  }}
-                >
-                  <WidgetBoundary
-                    key={`${widget.id}:${widget.revision}:${resets[widget.id] ?? 0}`}
-                    widgetId={widget.id}
-                    locale={snapshot.bootstrap.locale}
-                    onReset={() =>
-                      setResets((current) => ({
-                        ...current,
-                        [widget.id]: (current[widget.id] ?? 0) + 1,
-                      }))
-                    }
-                    onCrash={() => {
-                      if (widget.widgetType !== "plugin") return;
-                      const pluginId = widget.settings.pluginId;
-                      if (typeof pluginId === "string")
-                        void props.plugins.recordCrash(pluginId);
-                    }}
-                    onDisable={() =>
-                      void props.workspace.setWidget(
-                        widget.id,
-                        widget.revision,
-                        {
-                          visible: false,
-                        },
-                      )
-                    }
-                  >
-                    {widget.widgetType === "plugin" &&
-                    typeof widget.settings.pluginId === "string" &&
-                    typeof widget.settings.instanceId === "string" ? (
-                      <PluginWidget
-                        platform={props.plugins}
-                        pluginId={widget.settings.pluginId}
-                        instanceId={widget.settings.instanceId}
-                        locale={snapshot.bootstrap.locale}
-                        now={now}
-                        crash={widget.settings.pluginFault === true}
-                      />
-                    ) : (
-                      <WidgetChrome
-                        widget={widget}
-                        locale={snapshot.bootstrap.locale}
-                        onOpen={openModule}
-                      >
-                        <WidgetBody
-                          widget={widget}
-                          bootstrap={snapshot.bootstrap}
-                          shared={snapshot.shared}
-                          now={now}
-                          online={props.online}
-                          notes={library?.notes ?? []}
-                          tasks={library?.tasks ?? []}
-                          bookmarks={library?.bookmarks ?? []}
-                          events={events}
-                          timer={activeTimer}
-                          onSearch={(value) => setLocalQuery(value)}
-                          onWebSearch={(value) => {
-                            if (!props.online) {
-                              setNotice(t("search.offline"));
-                              return;
-                            }
-                            try {
-                              window.open(
-                                webSearchUrl(
-                                  searchTemplate(snapshot.bootstrap),
-                                  value,
-                                ),
-                                "_blank",
-                                "noopener",
-                              );
-                            } catch {
-                              setNotice(t("search.invalid"));
-                            }
-                          }}
-                          onToggleTask={(id, revision, done) =>
-                            void props.productivity
-                              .saveTask(id, revision, {
-                                status: done ? "done" : "open",
-                              })
-                              .then(() => reload())
-                              .catch(() => setNotice(t("settings.error")))
-                          }
-                          onOpenNote={() => setView("notes")}
-                          onStartTimer={() =>
-                            void props.calendar
-                              .startTimer({
-                                mode: "pomodoro",
-                                durationMs: 25 * 60_000,
-                              })
-                              .then(() => reload())
-                              .catch(() => setNotice(t("settings.error")))
-                          }
-                          onPauseTimer={() => {
-                            if (!activeTimer) return;
-                            void props.calendar
-                              .pauseTimer(activeTimer.id)
-                              .then(() => reload())
-                              .catch(() => setNotice(t("settings.error")));
-                          }}
-                          onResumeTimer={() => {
-                            if (!activeTimer) return;
-                            void props.calendar
-                              .resumeTimer(activeTimer.id)
-                              .then(() => reload())
-                              .catch(() => setNotice(t("settings.error")));
-                          }}
-                          onResetTimer={() => {
-                            if (!activeTimer) return;
-                            void props.calendar
-                              .resetTimer(activeTimer.id)
-                              .then(() => reload())
-                              .catch(() => setNotice(t("settings.error")));
-                          }}
-                        />
-                      </WidgetChrome>
-                    )}
-                  </WidgetBoundary>
-                  {editing ? (
-                    <div className="widget-actions">
-                      <button
-                        className="btn"
-                        type="button"
-                        onClick={() => void persistMove(widget, -1, 0)}
-                      >
-                        {t("widget.move")} ←
-                      </button>
-                      <button
-                        className="btn"
-                        type="button"
-                        onClick={() => void persistMove(widget, 1, 0)}
-                      >
-                        {t("widget.move")} →
-                      </button>
-                      <button
-                        className="btn"
-                        type="button"
-                        onClick={() => void persistMove(widget, 0, -1)}
-                      >
-                        {t("widget.move")} ↑
-                      </button>
-                      <button
-                        className="btn"
-                        type="button"
-                        onClick={() => void persistMove(widget, 0, 1)}
-                      >
-                        {t("widget.move")} ↓
-                      </button>
-                      {sizes.map((size) => (
+            {bell ? (
+              <NotificationCenter
+                locale={snapshot.bootstrap.locale}
+                rows={reminders}
+                quiet={quiet}
+                timer={activeTimer}
+                calendar={props.calendar}
+                onChanged={reload}
+              />
+            ) : null}
+            {localQuery ? (
+              <section className="glass" aria-label={t("search.results")}>
+                <h2>{t("search.results")}</h2>
+                <p className="muted">{t("search.local")}</p>
+                <ul>
+                  {searchLibrary(
+                    {
+                      notes: library?.notes ?? [],
+                      tasks: library?.tasks ?? [],
+                      bookmarks: library?.bookmarks ?? [],
+                      commands: commands.map((command) => ({
+                        id: command.id,
+                        label: command.label,
+                      })),
+                    },
+                    localQuery,
+                  )
+                    .slice(0, 20)
+                    .map((hit) => (
+                      <li key={`${hit.kind}:${hit.id}`}>
                         <button
-                          key={`${size.w}x${size.h}`}
                           className="btn"
                           type="button"
-                          onClick={() =>
-                            void persistSize(widget, size.w, size.h)
-                          }
+                          onClick={() => {
+                            if (hit.kind === "note") {
+                              setSelectedNoteId(hit.id);
+                              setView("notes");
+                            }
+                            if (hit.kind === "task") {
+                              setSelectedTaskId(hit.id);
+                              setView("tasks");
+                            }
+                            if (hit.kind === "bookmark") setView("bookmarks");
+                            if (hit.kind === "command")
+                              void runCommand(
+                                commands.find((item) => item.id === hit.id),
+                              );
+                            setLocalQuery("");
+                          }}
                         >
-                          {t("widget.resize")} {size.w}x{size.h}
+                          <bdi>{hit.title}</bdi>
                         </button>
-                      ))}
-                      <button
-                        className="btn"
-                        type="button"
-                        onPointerDown={(event) =>
-                          startDrag(
-                            event,
-                            widget,
-                            widgets,
-                            props.workspace,
-                            profile.id,
-                            setNotice,
-                            t("settings.error"),
-                          )
-                        }
-                      >
-                        {t("widget.move")}
-                      </button>
-                      <button
-                        className="btn"
-                        type="button"
-                        onClick={() =>
-                          void props.workspace.setWidget(
-                            widget.id,
-                            widget.revision,
-                            { visible: !widget.visible },
-                          )
-                        }
-                      >
-                        {widget.visible ? t("edit.hide") : t("edit.show")}
-                      </button>
-                      <button
-                        className="btn"
-                        type="button"
-                        onClick={() =>
-                          void props.workspace.removeWidget(widget.id)
-                        }
-                      >
-                        {t("edit.remove")}
-                      </button>
+                        <span className="muted">{hit.kind}</span>
+                      </li>
+                    ))}
+                </ul>
+              </section>
+            ) : null}
+            {view === "settings" ? (
+              <SettingsScreen
+                workspace={props.workspace}
+                onHome={() => setView("home")}
+              />
+            ) : null}
+            {view === "plugins" ? (
+              <PluginStudio
+                platform={props.plugins}
+                profileId={
+                  snapshot.profiles.find(
+                    (item) => item.id === snapshot.bootstrap.selectedProfileId,
+                  )?.id ?? ""
+                }
+                locale={snapshot.bootstrap.locale}
+                now={now}
+                onChanged={() => void reload()}
+              />
+            ) : null}
+            {view === "calendar" ? (
+              <CalendarPanel
+                bootstrap={snapshot.bootstrap}
+                events={events}
+                calendar={props.calendar}
+                onChanged={reload}
+              />
+            ) : null}
+            {view === "home" ? (
+              <>
+                <section className="hero card-glass" aria-label={t("nav.home")}>
+                  <div className="hero-text">
+                    <div className="eyebrow">
+                      <span className="eyebrow-star" aria-hidden="true">
+                        ✦
+                      </span>
+                      <span>{t("hero.eyebrow")}</span>
+                      <span className="eyebrow-line" aria-hidden="true" />
                     </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-          {editing ? (
-            <div className="cluster">
-              <label>
-                {t("edit.add")}
-                <select
-                  className="select"
-                  defaultValue=""
-                  onChange={(event) => {
-                    const type = event.target.value as WidgetType;
-                    if (widgetTypes.includes(type))
-                      void props.workspace.addWidget(profile.id, type);
-                    event.target.value = "";
+                    <h1>
+                      <span>{t("hero.first")}</span>
+                      <br />
+                      <em>{t("hero.second")}</em>
+                    </h1>
+                    <p className="hero-desc">{t("hero.desc")}</p>
+                    <form
+                      className="hero-search"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const data = new FormData(event.currentTarget);
+                        setLocalQuery(String(data.get("q") ?? ""));
+                      }}
+                    >
+                      <Icon name="search" />
+                      <input
+                        id="dashboard-search"
+                        name="q"
+                        type="search"
+                        aria-label={t("search.label")}
+                        placeholder={t("search.placeholder")}
+                        defaultValue={localQuery}
+                      />
+                      <kbd>Ctrl K</kbd>
+                    </form>
+                    <p
+                      className="muted"
+                      style={{ marginTop: "1rem", fontSize: 11 }}
+                    >
+                      {t("home.heading")}
+                    </p>
+                  </div>
+                  <div className="hero-art" aria-hidden="true">
+                    <div className="hero-orbit orbit-outer" />
+                    <div className="hero-orbit orbit-mid" />
+                    <div className="hero-orbit orbit-inner" />
+                    <div className="hero-planet" />
+                    <i className="satellite sat-a" />
+                    <i className="satellite sat-b" />
+                    <div className="clock-stack">
+                      <span className="clock-label">{t("hero.localTime")}</span>
+                      <div className="hero-clock">{clock.time}</div>
+                      <span className="clock-date">
+                        {clock.dates[0] ?? clock.dates.join(" · ")}
+                      </span>
+                    </div>
+                  </div>
+                </section>
+
+                <div className="section-heading">
+                  <div>
+                    <span className="section-kicker">
+                      {t("hero.overviewKicker")}
+                    </span>
+                    <h2>{t("hero.overview")}</h2>
+                  </div>
+                  <button
+                    className="text-btn"
+                    type="button"
+                    onClick={() => setEditing((value) => !value)}
+                  >
+                    <Icon name="sliders" />
+                    <span>{editing ? t("nav.done") : t("hero.customize")}</span>
+                  </button>
+                </div>
+              </>
+            ) : null}
+            {library &&
+            view !== "home" &&
+            view !== "calendar" &&
+            view !== "plugins" &&
+            view !== "settings" ? (
+              <LibraryScreen
+                view={view}
+                selectedNoteId={selectedNoteId}
+                selectedTaskId={selectedTaskId}
+                onSelectedNote={setSelectedNoteId}
+                onSelectedTask={setSelectedTaskId}
+                library={library}
+                productivity={props.productivity}
+                bookmarks={props.bookmarks}
+                locale={snapshot.bootstrap.locale}
+              />
+            ) : null}
+            {view === "home" ? (
+              <>
+                <div
+                  className="grid"
+                  style={{
+                    ["--columns" as string]: columns,
                   }}
                 >
-                  <option value="">{t("edit.add")}</option>
-                  {widgetTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          ) : null}
-          <footer className="page-footer">
-            <span>
-              <span className="footer-spark" aria-hidden="true">
-                ✦
-              </span>{" "}
-              {t("hero.footerLeft")}
-            </span>
-            <span>{t("hero.footerRight")}</span>
-          </footer>
-        </>
-      ) : null}
+                  {widgets.map((widget) => {
+                    const box =
+                      display.find((item) => item.id === widget.id) ?? widget;
+                    const openModule =
+                      widget.widgetType === "notes"
+                        ? () => setView("notes")
+                        : widget.widgetType === "today"
+                          ? () => setView("tasks")
+                          : widget.widgetType === "upcoming"
+                            ? () => setView("calendar")
+                            : widget.widgetType === "bookmarks"
+                              ? () => setView("bookmarks")
+                              : undefined;
+                    return (
+                      <article
+                        key={widget.id}
+                        className="card-glass widget"
+                        data-hidden={widget.visible ? "false" : "true"}
+                        style={{
+                          gridColumn: `${box.x + 1} / span ${box.w}`,
+                          gridRow: `${box.y + 1} / span ${box.h}`,
+                        }}
+                      >
+                        <WidgetBoundary
+                          key={`${widget.id}:${widget.revision}:${resets[widget.id] ?? 0}`}
+                          widgetId={widget.id}
+                          locale={snapshot.bootstrap.locale}
+                          onReset={() =>
+                            setResets((current) => ({
+                              ...current,
+                              [widget.id]: (current[widget.id] ?? 0) + 1,
+                            }))
+                          }
+                          onCrash={() => {
+                            if (widget.widgetType !== "plugin") return;
+                            const pluginId = widget.settings.pluginId;
+                            if (typeof pluginId === "string")
+                              void props.plugins.recordCrash(pluginId);
+                          }}
+                          onDisable={() =>
+                            void props.workspace.setWidget(
+                              widget.id,
+                              widget.revision,
+                              {
+                                visible: false,
+                              },
+                            )
+                          }
+                        >
+                          {widget.widgetType === "plugin" &&
+                          typeof widget.settings.pluginId === "string" &&
+                          typeof widget.settings.instanceId === "string" ? (
+                            <PluginWidget
+                              platform={props.plugins}
+                              pluginId={widget.settings.pluginId}
+                              instanceId={widget.settings.instanceId}
+                              locale={snapshot.bootstrap.locale}
+                              now={now}
+                              crash={widget.settings.pluginFault === true}
+                            />
+                          ) : (
+                            <WidgetChrome
+                              widget={widget}
+                              locale={snapshot.bootstrap.locale}
+                              onOpen={openModule}
+                            >
+                              <WidgetBody
+                                widget={widget}
+                                bootstrap={snapshot.bootstrap}
+                                shared={snapshot.shared}
+                                now={now}
+                                online={online}
+                                notes={library?.notes ?? []}
+                                tasks={library?.tasks ?? []}
+                                bookmarks={library?.bookmarks ?? []}
+                                events={events}
+                                timer={activeTimer}
+                                onSearch={(value) => setLocalQuery(value)}
+                                onWebSearch={(value) => {
+                                  if (!online) {
+                                    setNotice(t("search.offline"));
+                                    return;
+                                  }
+                                  try {
+                                    window.open(
+                                      webSearchUrl(
+                                        searchTemplate(snapshot.bootstrap),
+                                        value,
+                                      ),
+                                      "_blank",
+                                      "noopener",
+                                    );
+                                  } catch {
+                                    setNotice(t("search.invalid"));
+                                  }
+                                }}
+                                onToggleTask={(id, revision, done) =>
+                                  void props.productivity
+                                    .saveTask(id, revision, {
+                                      status: done ? "done" : "open",
+                                    })
+                                    .then(() => reload())
+                                    .catch(() => setNotice(t("settings.error")))
+                                }
+                                onOpenNote={(id) => {
+                                  setSelectedNoteId(id);
+                                  setView("notes");
+                                }}
+                                onOpenTask={(id) => setTaskDialogId(id)}
+                                onCreateTask={() => {
+                                  setCaptureToday(true);
+                                  setCaptureKind("task");
+                                  setCapture(true);
+                                }}
+                                onMoveToday={(id, direction) => {
+                                  const rows = (library?.tasks ?? [])
+                                    .filter((task) => task.today)
+                                    .sort(
+                                      (a, b) =>
+                                        (a.todayOrder ?? 0) -
+                                        (b.todayOrder ?? 0),
+                                    );
+                                  const index = rows.findIndex(
+                                    (task) => task.id === id,
+                                  );
+                                  const other = rows[index + direction];
+                                  const current = rows[index];
+                                  if (!other || !current) return;
+                                  rows[index] = other;
+                                  rows[index + direction] = current;
+                                  void props.productivity
+                                    .reorderToday(rows)
+                                    .catch(() =>
+                                      setNotice(t("settings.error")),
+                                    );
+                                }}
+                                onStartTimer={() =>
+                                  void props.calendar
+                                    .startTimer({
+                                      mode: "pomodoro",
+                                      durationMs: 25 * 60_000,
+                                    })
+                                    .then(() => reload())
+                                    .catch(() => setNotice(t("settings.error")))
+                                }
+                                onPauseTimer={() => {
+                                  if (!activeTimer) return;
+                                  void props.calendar
+                                    .pauseTimer(activeTimer.id)
+                                    .then(() => reload())
+                                    .catch(() =>
+                                      setNotice(t("settings.error")),
+                                    );
+                                }}
+                                onResumeTimer={() => {
+                                  if (!activeTimer) return;
+                                  void props.calendar
+                                    .resumeTimer(activeTimer.id)
+                                    .then(() => reload())
+                                    .catch(() =>
+                                      setNotice(t("settings.error")),
+                                    );
+                                }}
+                                onResetTimer={() => {
+                                  if (!activeTimer) return;
+                                  void props.calendar
+                                    .resetTimer(activeTimer.id)
+                                    .then(() => reload())
+                                    .catch(() =>
+                                      setNotice(t("settings.error")),
+                                    );
+                                }}
+                              />
+                            </WidgetChrome>
+                          )}
+                        </WidgetBoundary>
+                        {editing ? (
+                          <div className="widget-actions">
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => void persistMove(widget, -1, 0)}
+                            >
+                              {t("widget.move")} ←
+                            </button>
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => void persistMove(widget, 1, 0)}
+                            >
+                              {t("widget.move")} →
+                            </button>
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => void persistMove(widget, 0, -1)}
+                            >
+                              {t("widget.move")} ↑
+                            </button>
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => void persistMove(widget, 0, 1)}
+                            >
+                              {t("widget.move")} ↓
+                            </button>
+                            {sizes.map((size) => (
+                              <button
+                                key={`${size.w}x${size.h}`}
+                                className="btn"
+                                type="button"
+                                onClick={() =>
+                                  void persistSize(widget, size.w, size.h)
+                                }
+                              >
+                                {t("widget.resize")} {size.w}x{size.h}
+                              </button>
+                            ))}
+                            <button
+                              className="btn"
+                              type="button"
+                              onPointerDown={(event) =>
+                                startDrag(
+                                  event,
+                                  widget,
+                                  widgets,
+                                  props.workspace,
+                                  profile.id,
+                                  setNotice,
+                                  t("settings.error"),
+                                )
+                              }
+                            >
+                              {t("widget.move")}
+                            </button>
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() =>
+                                void props.workspace.setWidget(
+                                  widget.id,
+                                  widget.revision,
+                                  { visible: !widget.visible },
+                                )
+                              }
+                            >
+                              {widget.visible ? t("edit.hide") : t("edit.show")}
+                            </button>
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() =>
+                                void props.workspace.removeWidget(widget.id)
+                              }
+                            >
+                              {t("edit.remove")}
+                            </button>
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+                {editing ? (
+                  <div className="cluster">
+                    <label>
+                      {t("edit.add")}
+                      <select
+                        className="select"
+                        defaultValue=""
+                        onChange={(event) => {
+                          const type = event.target.value as WidgetType;
+                          if (widgetTypes.includes(type))
+                            void props.workspace.addWidget(profile.id, type);
+                          event.target.value = "";
+                        }}
+                      >
+                        <option value="">{t("edit.add")}</option>
+                        {widgetTypes.map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+                <footer className="page-footer">
+                  <span>
+                    <span className="footer-spark" aria-hidden="true">
+                      ✦
+                    </span>{" "}
+                    {t("hero.footerLeft")}
+                  </span>
+                  <span>{t("hero.footerRight")}</span>
+                </footer>
+              </>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1034,6 +1232,7 @@ export function DashboardScreen(props: {
             type="button"
             role="menuitem"
             onClick={() => {
+              setCaptureToday(false);
               setCaptureKind("task");
               setCapture(true);
               setFabOpen(false);
@@ -1066,6 +1265,16 @@ export function DashboardScreen(props: {
         </div>
       ) : null}
 
+      {taskDialogId &&
+      library?.tasks.find((task) => task.id === taskDialogId) ? (
+        <TaskDialog
+          key={taskDialogId}
+          task={library.tasks.find((task) => task.id === taskDialogId)!}
+          productivity={props.productivity}
+          locale={snapshot.bootstrap.locale}
+          onClose={() => setTaskDialogId(null)}
+        />
+      ) : null}
       {notice ? (
         <p className="toast glass" role="status">
           {notice}
@@ -1093,7 +1302,7 @@ export function DashboardScreen(props: {
                 if (event.key === "ArrowDown") {
                   event.preventDefault();
                   setSelected((index) =>
-                    Math.min(commands.length - 1, index + 1),
+                    Math.max(0, Math.min(commands.length - 1, index + 1)),
                   );
                 }
                 if (event.key === "ArrowUp") {
@@ -1106,12 +1315,17 @@ export function DashboardScreen(props: {
                 }
               }}
             />
-            <ul className="palette-list">
+            <ul
+              className="palette-list"
+              role="listbox"
+              aria-label={t("nav.palette")}
+            >
               {commands.map((command, index) => (
-                <li key={command.id}>
+                <li key={command.id} role="presentation">
                   <button
                     className="btn"
                     type="button"
+                    role="option"
                     aria-selected={index === selected}
                     onClick={() => void runCommand(command)}
                   >
@@ -1142,6 +1356,7 @@ export function DashboardScreen(props: {
         <CaptureDialog
           locale={snapshot.bootstrap.locale}
           kind={captureKind}
+          taskToday={captureToday}
           productivity={props.productivity}
           onCreateEvent={async (title, details) => {
             const basis =
@@ -1168,9 +1383,7 @@ export function DashboardScreen(props: {
           calendarDisplay={snapshot.bootstrap.calendarDisplay}
           hourFormat={snapshot.bootstrap.hourFormat}
           themeMode={appearanceOf(snapshot, profile).themeMode}
-          preset={
-            profile.preset === "custom" ? "minimal" : profile.preset
-          }
+          preset={profile.preset === "custom" ? "minimal" : profile.preset}
           step={step}
           note={permissionNote}
           onSkip={() => void completeOnboarding()}
@@ -1229,7 +1442,7 @@ function startDrag(
   const move = (ev: PointerEvent) => {
     void ev;
   };
-  const up = (ev: PointerEvent) => {
+  const up = async (ev: PointerEvent) => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
     const dx = Math.round((ev.clientX - startX) / 96);
@@ -1243,7 +1456,7 @@ function startDrag(
       h: item.h,
     }));
     try {
-      void workspace.savePlacements(
+      await workspace.savePlacements(
         profileId,
         movePlacement(current, widget.id, dx, dy),
       );

@@ -21,7 +21,7 @@ describe("Dexie version 3 migration", () => {
   it("opens version 3 without deleting version 1 probes", async () => {
     const { db } = await import("../../src/infrastructure/db");
     await db.open();
-    expect(db.verno).toBe(5);
+    expect(db.verno).toBe(6);
     expect(await db.probes.get(probe.id)).toMatchObject({
       state: "pending",
       dueAt: 5,
@@ -32,6 +32,7 @@ describe("Dexie version 3 migration", () => {
       "events",
       "folders",
       "localBookmarks",
+      "noteDrafts",
       "notes",
       "notificationOccurrences",
       "pluginInstanceData",
@@ -149,7 +150,7 @@ describe("Dexie version 3 migration", () => {
     });
     version4.close();
     await db.open();
-    expect(db.verno).toBe(5);
+    expect(db.verno).toBe(6);
     expect(await db.probes.get(probe.id)).toMatchObject({ state: "pending" });
     expect(
       await db.notes.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
@@ -165,4 +166,68 @@ describe("Dexie version 3 migration", () => {
     );
     db.close();
   });
+});
+
+it("additively upgrades version 5 task and note records without changing IDs or losing content", async () => {
+  const { db } = await import("../../src/infrastructure/db");
+  if (db.isOpen()) db.close();
+  await Dexie.delete("Venus-p00");
+  const legacy = new Dexie("Venus-p00");
+  legacy.version(5).stores({
+    notes: "id, folderId, pinned, trashedAt, updatedAt",
+    tasks: "id, status, dueDate, focusRank",
+  });
+  const id = "11111111-1111-4111-8111-111111111111";
+  const doneId = "22222222-2222-4222-8222-222222222222";
+  await legacy.table("tasks").bulkPut([
+    {
+      id,
+      title: "Old focused task",
+      status: "open",
+      focusRank: 2,
+      details: "keep",
+      revision: 7,
+    },
+    {
+      id: doneId,
+      title: "Done",
+      status: "done",
+      focusRank: null,
+      updatedAt: "2026-01-01",
+      revision: 3,
+    },
+  ]);
+  await legacy.table("notes").put({
+    id,
+    title: "Old note",
+    body: { type: "doc", content: [] },
+    revision: 4,
+  });
+  legacy.close();
+  await db.open();
+  expect(await db.tasks.get(id)).toMatchObject({
+    id,
+    title: "Old focused task",
+    column: "todo",
+    today: true,
+    todayOrder: 2,
+    focusRank: 2,
+    details: "keep",
+    checklist: [],
+    labels: [],
+    revision: 7,
+  });
+  expect(await db.tasks.get(doneId)).toMatchObject({
+    column: "done",
+    completedAt: "2026-01-01",
+    revision: 3,
+  });
+  expect(await db.notes.get(id)).toMatchObject({
+    id,
+    title: "Old note",
+    body: { type: "doc", content: [] },
+    revision: 4,
+    sortIndex: 0,
+  });
+  db.close();
 });

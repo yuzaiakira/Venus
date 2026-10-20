@@ -45,7 +45,9 @@ export default defineBackground(() => {
     if (!notificationListenerRegistered && browser.notifications?.onClicked) {
       browser.notifications.onClicked.addListener(() => {
         void browser.tabs
-          .create({ url: browser.runtime.getURL("/options.html") })
+          .create({
+            url: browser.runtime.getURL("/newtab.html") + "#notifications",
+          })
           .catch(recordFailure);
       });
       notificationListenerRegistered = true;

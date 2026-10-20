@@ -13,6 +13,7 @@ import type {
   FolderRecord,
   LocalBookmarkRecord,
   NoteRecord,
+  NoteDraft,
   TaskRecord,
 } from "../domain/productivity";
 import type {
@@ -33,6 +34,7 @@ export const db = new Dexie("Venus-p00") as Dexie & {
   sharedItems: EntityTable<SharedItem, "id">;
   assets: EntityTable<AssetRecord, "id">;
   notes: EntityTable<NoteRecord, "id">;
+  noteDrafts: EntityTable<NoteDraft, "id">;
   folders: EntityTable<FolderRecord, "id">;
   tasks: EntityTable<TaskRecord, "id">;
   localBookmarks: EntityTable<LocalBookmarkRecord, "id">;
@@ -101,8 +103,42 @@ db.version(5).stores({
   pluginPackages: "id, enabled, installedAt",
   pluginInstanceData: "id, pluginId, instanceId, updatedAt",
 });
+// Additive repair migration: retain every existing table, ID and revision.
+db.version(6)
+  .stores({
+    noteDrafts: "id, noteId, updatedAt",
+    tasks: "id, status, dueDate, focusRank, column, sortIndex",
+    notes: "id, folderId, pinned, trashedAt, updatedAt, sortIndex",
+  })
+  .upgrade(async (tx) => {
+    let taskOrder = 0;
+    await tx
+      .table("tasks")
+      .toCollection()
+      .modify((task) => {
+        task.column ??= task.status === "done" ? "done" : "todo";
+        task.sortIndex ??= taskOrder++;
+        task.today ??= task.focusRank != null;
+        task.todayOrder ??= task.focusRank ?? task.sortIndex;
+        task.labels ??= [];
+        task.checklist ??= [];
+        task.completedAt ??=
+          task.status === "done"
+            ? (task.updatedAt ?? task.createdAt ?? null)
+            : null;
+      });
+    const notes = await tx.table("notes").toArray();
+    notes.sort((a, b) =>
+      String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? "")),
+    );
+    for (const [index, note] of notes.entries()) {
+      note.sortIndex ??= index;
+      await tx.table("notes").put(note);
+    }
+  });
 export const productivityDb: ProductivityDatabase = {
   notes: db.notes,
+  noteDrafts: db.noteDrafts,
   folders: db.folders,
   tasks: db.tasks,
   localBookmarks: db.localBookmarks,
@@ -110,7 +146,14 @@ export const productivityDb: ProductivityDatabase = {
   transaction: (_mode, _tables, work) =>
     db.transaction(
       "rw",
-      [db.notes, db.folders, db.tasks, db.localBookmarks, db.bookmarkSnapshots],
+      [
+        db.notes,
+        db.noteDrafts,
+        db.folders,
+        db.tasks,
+        db.localBookmarks,
+        db.bookmarkSnapshots,
+      ],
       work,
     ),
 };
@@ -120,7 +163,18 @@ export const calendarDb: CalendarDatabase = {
   notificationOccurrences: db.notificationOccurrences,
   timerSessions: db.timerSessions,
   quietHours: db.quietHours,
-  transaction: (work) => db.transaction("rw", db.notificationOccurrences, work),
+  transaction: (work) =>
+    db.transaction(
+      "rw",
+      [
+        db.events,
+        db.reminderRules,
+        db.notificationOccurrences,
+        db.timerSessions,
+        db.quietHours,
+      ],
+      work,
+    ),
 };
 export async function saveProbe(input: unknown) {
   const probe = ProbeSchema.parse(input);

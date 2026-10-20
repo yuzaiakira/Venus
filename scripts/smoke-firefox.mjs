@@ -1,7 +1,13 @@
 import { browserProbes } from "./browser-probes.mjs";
-import { closeSync, existsSync, openSync, readFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname, basename } from "node:path";
 import { execFileSync } from "node:child_process";
 import {
   mkdir,
@@ -44,28 +50,32 @@ const policies = {
 // A disposable application directory of symlinks plus its own
 // distribution/policies.json is loaded on a normal release build. It does
 // not change /usr/lib/firefox or the user's Firefox profile.
+const installedBinary = realpathSync(binary);
+const installedApp = process.env.FIREFOX_APP_DIR ?? dirname(installedBinary);
+const executableName = basename(installedBinary);
 const appDir = join(scratch, "app");
 const appDist = join(appDir, "distribution");
 await mkdir(appDist, { recursive: true });
-for (const name of await readdir("/usr/lib/firefox")) {
+for (const name of await readdir(installedApp)) {
   if (name === "distribution") continue;
-  if (name === "firefox") {
-    await copyFile(join("/usr/lib/firefox", name), join(appDir, name));
+  if (name === executableName) {
+    await copyFile(join(installedApp, name), join(appDir, name));
     continue;
   }
-  await symlink(join("/usr/lib/firefox", name), join(appDir, name));
+  await symlink(join(installedApp, name), join(appDir, name));
 }
-await copyFile(
-  "/usr/lib/firefox/distribution/distribution.ini",
-  join(appDist, "distribution.ini"),
-);
+if (existsSync(join(installedApp, "distribution/distribution.ini")))
+  await copyFile(
+    join(installedApp, "distribution/distribution.ini"),
+    join(appDist, "distribution.ini"),
+  );
 await writeFile(join(appDist, "policies.json"), JSON.stringify(policies));
 const policiesPath = join(scratch, "policies.json");
 await writeFile(policiesPath, JSON.stringify(policies));
 const wrapper = join(scratch, "firefox-wrapper.sh");
 await writeFile(
   wrapper,
-  `#!/bin/sh\nexec '${join(appDir, "firefox").replaceAll("'", "'\\''")}' -remote-allow-system-access "$@"\n`,
+  `#!/bin/sh\nexec '${join(appDir, executableName).replaceAll("'", "'\\''")}' -remote-allow-system-access "$@"\n`,
   { mode: 0o755 },
 );
 const profileDir = join(scratch, "profile");
@@ -174,11 +184,11 @@ try {
   await driver.switchTo().window(fresh);
   await driver.setContext("content");
   await driver.wait(
-    until.elementLocated(By.css("h1")),
+    until.elementLocated(By.css(".hero h1")),
     15000,
     "Fresh offline Firefox tab did not render the bundled heading",
   );
-  if ((await driver.findElement(By.css("h1")).getText()) !== "Venus")
+  if (!(await driver.findElement(By.css(".hero h1")).getText()).trim())
     throw new Error("Firefox New Tab override not rendered");
   const offline = await driver.executeScript("return !navigator.onLine");
   if (!offline) throw new Error("Firefox isolated profile is not offline");
@@ -204,12 +214,12 @@ try {
     await driver.executeScript("BrowserCommands.home();");
     await driver.setContext("content");
     await driver.wait(
-      until.elementLocated(By.css("h1")),
+      until.elementLocated(By.css(".hero h1")),
       15000,
       "Firefox Home command did not render bundled app",
     );
     if (
-      (await driver.findElement(By.css("h1")).getText()) !== "Venus" ||
+      !(await driver.findElement(By.css(".hero h1")).getText()).trim() ||
       (await driver.getCurrentUrl()) !== newTabURL
     )
       throw new Error("Home did not resolve to the same bundled shell");
