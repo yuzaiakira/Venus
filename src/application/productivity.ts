@@ -360,6 +360,7 @@ export function createProductivity(
       throw new WorkspaceError("invalidInput");
   }
   async function createNote(input: {
+    id?: string;
     title: string;
     body: NoteDocument;
     folderId: string | null;
@@ -369,8 +370,12 @@ export function createProductivity(
       "rw",
       [database.notes, database.folders],
       async () => {
+        if (input.id) {
+          const existing = await database.notes.get(input.id);
+          if (existing) return existing;
+        }
         const row = noteSchema.parse({
-          id: crypto.randomUUID(),
+          id: input.id ?? crypto.randomUUID(),
           title: input.title.trim(),
           body: validateNoteDocument(input.body),
           folderId: input.folderId,
@@ -453,26 +458,38 @@ export function createProductivity(
     );
     changed(id, Date.now());
   }
-  async function createTask(title: string, details = "", today = false) {
-    const row = taskSchema.parse({
-      id: crypto.randomUUID(),
-      title: title.trim(),
-      details,
-      status: "open",
-      column: "todo",
-      sortIndex: Date.now(),
-      today,
-      todayOrder: Date.now(),
-      labels: [],
-      checklist: [],
-      priority: 2,
-      dueDate: null,
-      eventId: null,
-      focusRank: null,
-      completedAt: null,
-      ...stamp(),
+  async function createTask(
+    title: string,
+    details = "",
+    today = false,
+    id?: string,
+  ) {
+    const row = await database.transaction("rw", [database.tasks], async () => {
+      if (id) {
+        const existing = await database.tasks.get(id);
+        if (existing) return existing;
+      }
+      const next = taskSchema.parse({
+        id: id ?? crypto.randomUUID(),
+        title: title.trim(),
+        details,
+        status: "open",
+        column: "todo",
+        sortIndex: Date.now(),
+        today,
+        todayOrder: Date.now(),
+        labels: [],
+        checklist: [],
+        priority: 2,
+        dueDate: null,
+        eventId: null,
+        focusRank: null,
+        completedAt: null,
+        ...stamp(),
+      });
+      await database.tasks.put(next);
+      return next;
     });
-    await database.tasks.put(row);
     changed(row.id, row.revision);
     return row;
   }

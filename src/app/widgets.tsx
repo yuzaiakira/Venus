@@ -23,6 +23,7 @@ import type { GoalDetails } from "../application/goals";
 import type { ReviewEntry } from "../application/reviews";
 import type { PeopleWorkspace } from "../application/people";
 import type { FocusWorkspace } from "../domain/focus";
+import type { InboxWorkspace } from "../application/inbox";
 import { translate, type MessageKey } from "../locales/messages";
 import { Icon, type IconName } from "./icons";
 
@@ -119,6 +120,12 @@ const chrome: Record<
     title: "widget.focusCoachTitle",
     sub: "widget.focusCoachSub",
   },
+  inbox: {
+    icon: "note",
+    tone: "pink",
+    title: "widget.inboxTitle",
+    sub: "widget.inboxSub",
+  },
 };
 
 export function WidgetChrome(props: {
@@ -174,6 +181,7 @@ export function WidgetBody(props: {
   reviews: ReviewEntry[];
   people: PeopleWorkspace | null;
   focus: FocusWorkspace | null;
+  inbox: InboxWorkspace | null;
   bookmarks: LocalBookmarkRecord[];
   events: EventRecord[];
   timer: TimerRecord | null;
@@ -181,6 +189,7 @@ export function WidgetBody(props: {
   online: boolean;
   onWebSearch: (query: string) => void;
   onCapture?: ((kind: "note" | "task" | "event") => void) | undefined;
+  onCaptureInbox?: (() => void) | undefined;
   onToggleHabit?:
     | ((id: string, revision: number, date: string) => void)
     | undefined;
@@ -354,6 +363,30 @@ export function WidgetBody(props: {
         ))}
         {!props.habits.length ? <li className="muted">No habits yet</li> : null}
       </ul>
+    );
+  }
+  if (props.widget.widgetType === "inbox") {
+    const next = props.inbox?.pending[0] ?? null;
+    return (
+      <div>
+        <p className="briefing-lead">
+          {t("inbox.pending")}: {props.inbox?.pending.length ?? 0}
+        </p>
+        {next ? (
+          <p className="muted">
+            <bdi>{next.draft.title}</bdi>
+          </p>
+        ) : (
+          <p className="muted">{t("inbox.empty")}</p>
+        )}
+        <button
+          className="btn primary"
+          type="button"
+          onClick={props.onCaptureInbox}
+        >
+          {t("inbox.capture")}
+        </button>
+      </div>
     );
   }
   if (props.widget.widgetType === "goals") {

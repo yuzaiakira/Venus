@@ -163,6 +163,7 @@ export function createCalendar(input: {
     );
   }
   async function createEvent(draft: {
+    id?: string;
     title: string;
     description?: string;
     basis: "gregorian" | "jalali";
@@ -180,13 +181,17 @@ export function createCalendar(input: {
     foldPolicy?: "earlier" | "later";
   }) {
     const result = await input.database.transaction(async () => {
+      if (draft.id) {
+        const existing = await input.database.events.get(draft.id);
+        if (existing) return existing;
+      }
       const localDate =
         draft.localDate ?? todayInZone(draft.zoneId, now(), draft.basis);
       assertProductDate({ ...localDate, calendar: draft.basis });
       const recurrence = draft.recurrence ? assertRule(draft.recurrence) : null;
       const stamp = new Date(now()).toISOString();
       const row = eventSchema.parse({
-        id: crypto.randomUUID(),
+        id: draft.id ?? crypto.randomUUID(),
         title: draft.title.trim(),
         description: draft.description ?? "",
         calendarBasis: draft.basis,
@@ -327,8 +332,12 @@ export function createCalendar(input: {
     await armSweep();
     return result;
   }
-  async function deleteEvent(id: string) {
+  async function deleteEvent(id: string, expected?: number) {
     const result = await input.database.transaction(async () => {
+      const current = await input.database.events.get(id);
+      if (!current) throw new WorkspaceError("notFound");
+      if (expected !== undefined && current.revision !== expected)
+        throw new WorkspaceError("conflict");
       await cancelFuture(id);
       const rules = await input.database.reminderRules.toArray();
       for (const rule of rules) {

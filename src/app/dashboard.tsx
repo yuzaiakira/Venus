@@ -36,6 +36,8 @@ import type { Reviews, ReviewsWorkspace } from "../application/reviews";
 import type { People, PeopleWorkspace } from "../application/people";
 import type { Focus } from "../application/focus";
 import type { FocusWorkspace } from "../domain/focus";
+import type { Inbox } from "../application/inbox";
+import type { InboxWorkspace } from "../application/inbox";
 import type { PluginPlatform } from "../application/plugins";
 import type {
   EventRecord,
@@ -53,6 +55,7 @@ import { GoalsScreen } from "./goals";
 import { ReviewsScreen } from "./reviews";
 import { PeopleScreen } from "./people";
 import { FocusScreen } from "./focus";
+import { InboxScreen } from "./inbox";
 import { PluginStudio, PluginWidget } from "./plugin-studio";
 import { SettingsScreen } from "./settings";
 import { Icon } from "./icons";
@@ -73,6 +76,7 @@ export function DashboardScreen(props: {
   reviews: Reviews;
   people: People;
   focus: Focus;
+  inbox: Inbox;
   plugins: PluginPlatform;
   online: boolean;
 }) {
@@ -114,6 +118,8 @@ export function DashboardScreen(props: {
   const [reviewsData, setReviewsData] = useState<ReviewsWorkspace | null>(null);
   const [peopleData, setPeopleData] = useState<PeopleWorkspace | null>(null);
   const [focusData, setFocusData] = useState<FocusWorkspace | null>(null);
+  const [inboxData, setInboxData] = useState<InboxWorkspace | null>(null);
+  const [inboxCapture, setInboxCapture] = useState(0);
   const [view, setView] = useState<
     | "home"
     | "notes"
@@ -127,6 +133,7 @@ export function DashboardScreen(props: {
     | "reviews"
     | "people"
     | "focus"
+    | "inbox"
   >("home");
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [reminders, setReminders] = useState<NotificationRecord[]>([]);
@@ -173,16 +180,22 @@ export function DashboardScreen(props: {
       const today = new Intl.DateTimeFormat("en-CA", {
         timeZone: next.bootstrap.timeZone,
       }).format(new Date());
-      const [goalContent, reviewContent, peopleContent, focusContent] =
-        await Promise.all([
-          props.goals.load(next.bootstrap.selectedProfileId),
-          props.reviews.load(next.bootstrap.selectedProfileId, today),
-          props.people.load(next.bootstrap.selectedProfileId, today),
-          props.focus.load(
-            next.bootstrap.selectedProfileId,
-            next.bootstrap.timeZone,
-          ),
-        ]);
+      const [
+        goalContent,
+        reviewContent,
+        peopleContent,
+        focusContent,
+        inboxContent,
+      ] = await Promise.all([
+        props.goals.load(next.bootstrap.selectedProfileId),
+        props.reviews.load(next.bootstrap.selectedProfileId, today),
+        props.people.load(next.bootstrap.selectedProfileId, today),
+        props.focus.load(
+          next.bootstrap.selectedProfileId,
+          next.bootstrap.timeZone,
+        ),
+        props.inbox.load(next.bootstrap.selectedProfileId),
+      ]);
       if (sequence !== loadSequence.current) return;
       setSnapshot(next);
       setLibrary(content);
@@ -190,6 +203,7 @@ export function DashboardScreen(props: {
       setReviewsData(reviewContent);
       setPeopleData(peopleContent);
       setFocusData(focusContent);
+      setInboxData(inboxContent);
       setEvents(schedule.events);
       setReminders(schedule.notifications);
       setQuiet(schedule.quietHours);
@@ -213,6 +227,7 @@ export function DashboardScreen(props: {
     props.reviews,
     props.people,
     props.focus,
+    props.inbox,
   ]);
   async function completeOnboarding() {
     const bootstrap = await props.workspace.updatePreferences({
@@ -487,6 +502,7 @@ export function DashboardScreen(props: {
       icon: "clock" as const,
       label: t("nav.focus"),
     },
+    { id: "inbox" as const, icon: "note" as const, label: t("nav.inbox") },
     {
       id: "calendar" as const,
       icon: "calendar" as const,
@@ -952,6 +968,27 @@ export function DashboardScreen(props: {
                 }}
               />
             ) : null}
+            {view === "inbox" && inboxData ? (
+              <InboxScreen
+                profileId={profile.id}
+                data={inboxData}
+                inbox={props.inbox}
+                locale={snapshot.bootstrap.locale}
+                timeZone={snapshot.bootstrap.timeZone}
+                online={online}
+                onChanged={reload}
+                focusCapture={inboxCapture}
+                onOpenTask={(id) => {
+                  setSelectedTaskId(id);
+                  setView("tasks");
+                }}
+                onOpenNote={(id) => {
+                  setSelectedNoteId(id);
+                  setView("notes");
+                }}
+                onOpenEvent={() => setView("calendar")}
+              />
+            ) : null}
             {view === "home" ? (
               <>
                 <section className="hero card-glass" aria-label={t("nav.home")}>
@@ -1054,7 +1091,8 @@ export function DashboardScreen(props: {
             view !== "goals" &&
             view !== "reviews" &&
             view !== "people" &&
-            view !== "focus" ? (
+            view !== "focus" &&
+            view !== "inbox" ? (
               <LibraryScreen
                 view={view}
                 selectedNoteId={selectedNoteId}
@@ -1108,7 +1146,9 @@ export function DashboardScreen(props: {
                                       ? () => setView("people")
                                       : widget.widgetType === "focus"
                                         ? () => setView("focus")
-                                        : undefined;
+                                        : widget.widgetType === "inbox"
+                                          ? () => setView("inbox")
+                                          : undefined;
                     return (
                       <article
                         key={widget.id}
@@ -1198,6 +1238,7 @@ export function DashboardScreen(props: {
                                 reviews={reviewsData?.schedules ?? []}
                                 people={peopleData}
                                 focus={focusData}
+                                inbox={inboxData}
                                 bookmarks={library?.bookmarks ?? []}
                                 events={events}
                                 timer={activeTimer}
@@ -1223,6 +1264,10 @@ export function DashboardScreen(props: {
                                   setCaptureToday(kind === "task");
                                   setCaptureKind(kind);
                                   setCapture(true);
+                                }}
+                                onCaptureInbox={() => {
+                                  setView("inbox");
+                                  setInboxCapture((value) => value + 1);
                                 }}
                                 onToggleHabit={(id, revision, date) =>
                                   void props.productivity
@@ -1593,6 +1638,17 @@ export function DashboardScreen(props: {
             });
             await reload();
           }}
+          onSendToInbox={async (content) => {
+            const row = await props.inbox.create(
+              profile.id,
+              content,
+              snapshot.bootstrap.timeZone,
+            );
+            await reload();
+            setView("inbox");
+            setInboxCapture((value) => value + 1);
+            void row;
+          }}
           onClose={() => setCapture(false)}
           onKind={setCaptureKind}
         />
@@ -1664,6 +1720,7 @@ function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
     reviews: "widget.reviewsTitle",
     people: "widget.peopleTitle",
     focus: "widget.focusCoachTitle",
+    inbox: "widget.inboxTitle",
   };
   return t(labels[type]);
 }

@@ -11,6 +11,7 @@ export function CaptureDialog(props: {
   productivity: Productivity;
   taskToday?: boolean;
   onCreateEvent?: (title: string, details: string) => Promise<void>;
+  onSendToInbox?: (content: string) => Promise<void>;
   onClose: () => void;
   onKind: (kind: "note" | "task" | "event") => void;
 }) {
@@ -56,6 +57,22 @@ export function CaptureDialog(props: {
       setTitle("");
       setDetails("");
       closeTimer.current = window.setTimeout(() => props.onClose(), 450);
+    } catch {
+      setStatus("error");
+    }
+  }
+  async function sendToInbox() {
+    if (status === "saving" || !props.onSendToInbox) return;
+    setStatus("saving");
+    try {
+      const content = [title.trim(), details.trim()]
+        .filter(Boolean)
+        .join("\n\n");
+      if (!content) throw new WorkspaceError("invalidInput");
+      await props.onSendToInbox(content);
+      setStatus("saved");
+      setTitle("");
+      setDetails("");
     } catch {
       setStatus("error");
     }
@@ -122,6 +139,16 @@ export function CaptureDialog(props: {
         >
           {t("capture.save")}
         </button>
+        {props.onSendToInbox ? (
+          <button
+            className="btn"
+            type="button"
+            disabled={status === "saving"}
+            onClick={() => void sendToInbox()}
+          >
+            {t("inbox.capture")}
+          </button>
+        ) : null}
         <button className="btn" type="button" onClick={props.onClose}>
           {t("dialog.close")}
         </button>

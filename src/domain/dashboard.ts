@@ -30,6 +30,7 @@ export const widgetTypes = [
   "reviews",
   "people",
   "focus",
+  "inbox",
 ] as const;
 export const sharedKinds = ["note", "task", "event", "bookmark"] as const;
 export const allowedMime = ["image/png", "image/jpeg", "image/webp"] as const;
@@ -68,6 +69,7 @@ export const ModuleFlagsSchema = z
     reviews: z.boolean(),
     people: z.boolean(),
     focus: z.boolean(),
+    inbox: z.boolean(),
   })
   .strict();
 export const BootstrapSchema = z
@@ -171,6 +173,8 @@ export const defaultModules: Bootstrap["modules"] = {
   people: true,
   // Focus Coach stays opt-in and never changes an existing saved layout.
   focus: true,
+  // AI Inbox is opt-in and never changes an existing saved dashboard.
+  inbox: true,
 };
 
 export function defaultBootstrap(timeZone = "UTC"): Bootstrap {

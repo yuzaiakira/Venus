@@ -37,6 +37,8 @@ import type {
   PersonRecord,
 } from "../domain/people";
 import type { FocusDeferralRecord } from "../domain/focus";
+import type { InboxItemRecord } from "../domain/inbox";
+import type { InboxDatabase } from "../application/inbox";
 import type {
   PluginInstanceRecord,
   PluginPackageRecord,
@@ -69,6 +71,7 @@ export const db = new Dexie("Venus-p00") as Dexie & {
   followUps: EntityTable<FollowUpRecord, "id">;
   interactions: EntityTable<InteractionRecord, "id">;
   focusDeferrals: EntityTable<FocusDeferralRecord, "id">;
+  inboxItems: EntityTable<InboxItemRecord, "id">;
   localBookmarks: EntityTable<LocalBookmarkRecord, "id">;
   bookmarkSnapshots: EntityTable<BookmarkSnapshotRecord, "id">;
   events: EntityTable<EventRecord, "id">;
@@ -202,6 +205,11 @@ db.version(12).stores({
   focusDeferrals:
     "id, profileId, taskId, [profileId+taskId], deferredUntilDate, snoozedUntilUTC, updatedAt",
 });
+// v13 adds profile-owned, local-only AI Inbox records. It is deliberately
+// additive: all earlier workspace tables, identifiers and revisions remain.
+db.version(13).stores({
+  inboxItems: "id, profileId, status, selectedKind, updatedAt",
+});
 export const productivityDb: ProductivityDatabase = {
   notes: db.notes,
   noteDrafts: db.noteDrafts,
@@ -272,6 +280,12 @@ export const focusDb: FocusDatabase = {
       [db.profiles, db.tasks, db.events, db.timerSessions, db.focusDeferrals],
       work,
     ),
+};
+export const inboxDb: InboxDatabase = {
+  profiles: db.profiles,
+  inboxItems: db.inboxItems,
+  transaction: (_mode, _tables, work) =>
+    db.transaction("rw", [db.profiles, db.inboxItems], work),
 };
 export const goalsDb: GoalsDatabase = {
   profiles: db.profiles,

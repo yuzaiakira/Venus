@@ -44,7 +44,7 @@ equivalent transactional service operation.
 | ------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
 | Daily Briefing      | Know what matters now               | Top Today tasks, next calendar event and focus action; direct task opening                         | Reads existing local tasks, events and timer only                 | ✅ Implemented                                         |
 | Quick Capture       | Save an idea in seconds             | Capture task, note or event; title-first entry; Today toggle; clear success/failure state          | Uses existing local capture services                              | ✅ Implemented                                         |
-| AI Inbox            | Triage incoming material            | Review queue, classify to task/note/event, confidence/explanation, edit before save, reject/undo   | Local rules first; no remote AI without explicit opt-in           | ⬜ Planned                                             |
+| AI Inbox            | Triage incoming material            | Review queue, classify to task/note/event, confidence/explanation, edit before save, reject/undo   | Local rules first; no remote AI without explicit opt-in           | 🟡 Implementation verified; browser acceptance pending |
 | Habit Tracker       | Maintain routines                   | Daily/weekly habits, check-in, streak, schedule, missed state, history and reminder integration    | Local habit/check-in records                                      | 🟡 Implementation verified; browser acceptance pending |
 | Goals & Progress    | Connect work to outcomes            | Goals, time frame, measurable progress, linked tasks/habits, milestones, weekly review             | Local goal, milestone and relation records                        | 🟡 Implementation verified; browser acceptance pending |
 | Weather & Commute   | Prepare for the next commitment     | Location consent, forecast, event travel buffer, refresh time, graceful unavailable state          | Location/network are opt-in; cache minimally                      | ⬜ Planned                                             |
@@ -67,7 +67,7 @@ equivalent transactional service operation.
 8. **Focus Coach** — explainable schedule-aware suggestions. 🟡 Implementation
    verified; browser acceptance pending.
 9. **AI Inbox** — local triage queue; remote provider only after an explicit
-   product decision and consent design. ⬜ **Next milestone**
+   product decision and consent design. 🟡 Implementation verified; browser acceptance pending.
 10. **Weather & Commute** — only after a documented provider, location and
     network-consent design. ⬜
 11. **Finance Snapshot** — manual-first ledger, budget and export/delete
@@ -205,8 +205,31 @@ gate while this cloud environment cannot launch a supported browser.
   not treated as browser acceptance.
 - **Release readiness:** implementation is verified; browser acceptance remains
   open until the extension is exercised in official Firefox and secure
-  sandboxed Chromium, including responsive RTL focus interactions. The next
-  independent PDR delivery milestone is **AI Inbox**.
+  sandboxed Chromium, including responsive RTL focus interactions.
+
+## AI Inbox verification status — 2026-10-21
+
+- **Implementation and automated tests:** verified. Dexie v13 additively adds
+  profile-owned Inbox records and the v12 → v13 migration preserves existing
+  profile, task, note and widget identifiers before creating and reopening an
+  accepted Inbox task. The local-only rule classifier identifies English and
+  Persian action, date/time, informational and ambiguous text with a visible
+  confidence label and reason. It never sends text to a remote provider.
+- **PDR widget acceptance:** implemented. Explicit manual submissions create a
+  local review record; users can change the suggested type and all destination
+  fields before accepting it. Acceptance creates an idempotent task, note or
+  event through the existing services. Reject, restore, explicit removal and
+  revision-safe undo are supported. The opt-in singleton dashboard card is in
+  **Customize → Add widget**, persists its placement and never removes Inbox
+  records when removed. Quick Capture keeps its normal save action and exposes
+  a separate explicit **Send to AI Inbox** action.
+- **Real-browser acceptance:** pending. This cloud environment has no
+  supported Firefox or securely sandboxed Chromium runtime, so the responsive
+  RTL/LTR interface, Quick Capture affordance and destination links require
+  official Firefox and secure Chromium extension exercises.
+- **Release readiness:** implementation is verified; browser acceptance remains
+  open. The next independent PDR delivery milestone is **Weather & Commute**,
+  which requires a documented provider, location and network-consent design.
 
 ## Non-goals for this delivery
 

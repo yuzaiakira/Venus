@@ -4,12 +4,14 @@ import { createCalendar } from "../application/calendar";
 import { createGoals } from "../application/goals";
 import { createPeople } from "../application/people";
 import { createFocus } from "../application/focus";
+import { createInbox } from "../application/inbox";
 import { createReviews } from "../application/reviews";
 import { createProductivity } from "../application/productivity";
 import {
   calendarDb,
   db,
   focusDb,
+  inboxDb,
   goalsDb,
   peopleDb,
   productivityDb,
@@ -62,6 +64,7 @@ export const workspace = createWorkspace(
           db.followUps.toArray(),
           db.interactions.toArray(),
           db.focusDeferrals.toArray(),
+          db.inboxItems.toArray(),
           db.timerSessions.toArray(),
           db.notificationOccurrences.toArray(),
           db.quietHours.toArray(),
@@ -117,6 +120,7 @@ export const people = createPeople(peopleDb, publish, {
   syncFollowUp: (id) => calendar.syncFollowUp(id),
 });
 export const focus = createFocus(focusDb, publish);
+export const inbox = createInbox(inboxDb, publish, { productivity, calendar });
 
 export async function requestOptional(
   name: "bookmarks" | "notifications",

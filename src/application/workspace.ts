@@ -294,6 +294,7 @@ export function createWorkspace(
         db.followUps,
         db.interactions,
         db.focusDeferrals,
+        db.inboxItems,
         db.reminderRules,
         db.notificationOccurrences,
       ],
@@ -347,6 +348,7 @@ export function createWorkspace(
           await db.followUps.delete(followUp.id);
         for (const person of people) await db.people.delete(person.id);
         await db.focusDeferrals.where("profileId").equals(id).delete();
+        await db.inboxItems.where("profileId").equals(id).delete();
         await db.profiles.delete(id);
         if (!fallback) {
           fallback = {

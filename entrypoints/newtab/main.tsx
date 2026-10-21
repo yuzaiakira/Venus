@@ -4,6 +4,7 @@ import { browserBookmarks } from "../../src/infrastructure/browser-bookmarks";
 import {
   calendar,
   focus,
+  inbox,
   goals,
   plugins,
   people,
@@ -24,6 +25,7 @@ createRoot(root).render(
     reviews={reviews}
     people={people}
     focus={focus}
+    inbox={inbox}
     plugins={plugins}
     online={navigator.onLine}
   />,
