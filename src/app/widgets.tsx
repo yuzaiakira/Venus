@@ -21,6 +21,7 @@ import {
 import type { EventRecord, TimerRecord } from "../domain/time/records";
 import type { GoalDetails } from "../application/goals";
 import type { ReviewEntry } from "../application/reviews";
+import type { PeopleWorkspace } from "../application/people";
 import { translate, type MessageKey } from "../locales/messages";
 import { Icon, type IconName } from "./icons";
 
@@ -105,6 +106,12 @@ const chrome: Record<
     title: "widget.reviewsTitle",
     sub: "widget.reviewsSub",
   },
+  people: {
+    icon: "note",
+    tone: "blue",
+    title: "widget.peopleTitle",
+    sub: "widget.peopleSub",
+  },
 };
 
 export function WidgetChrome(props: {
@@ -158,6 +165,7 @@ export function WidgetBody(props: {
   habits: HabitRecord[];
   goals: GoalDetails[];
   reviews: ReviewEntry[];
+  people: PeopleWorkspace | null;
   bookmarks: LocalBookmarkRecord[];
   events: EventRecord[];
   timer: TimerRecord | null;
@@ -364,6 +372,28 @@ export function WidgetBody(props: {
             </li>
           ))}
         </ul>
+      </div>
+    );
+  }
+  if (props.widget.widgetType === "people") {
+    const due = props.people?.due ?? [];
+    const overdue = props.people?.overdue ?? [];
+    const next = props.people?.upcoming[0] ?? null;
+    return (
+      <div>
+        <p className="briefing-lead">
+          {t("people.dueToday")}: {due.length}
+        </p>
+        <p className="muted">
+          {t("people.overdue")}: {overdue.length}
+        </p>
+        {next ? (
+          <p className="muted">
+            {t("people.next")}: <bdi>{next.title}</bdi>
+          </p>
+        ) : (
+          <p className="muted">{t("people.noFollowUps")}</p>
+        )}
       </div>
     );
   }

@@ -5,6 +5,7 @@ import {
   calendar,
   goals,
   plugins,
+  people,
   productivity,
   reviews,
   workspace,
@@ -22,6 +23,7 @@ createRoot(root).render(
     calendar={calendar}
     goals={goals}
     reviews={reviews}
+    people={people}
     plugins={plugins}
     online={navigator.onLine}
   />,

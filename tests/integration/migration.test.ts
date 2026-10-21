@@ -21,7 +21,7 @@ describe("Dexie version 3 migration", () => {
   it("opens version 3 without deleting version 1 probes", async () => {
     const { db } = await import("../../src/infrastructure/db");
     await db.open();
-    expect(db.verno).toBe(10);
+    expect(db.verno).toBe(11);
     expect(await db.probes.get(probe.id)).toMatchObject({
       state: "pending",
       dueAt: 5,
@@ -31,14 +31,17 @@ describe("Dexie version 3 migration", () => {
       "bookmarkSnapshots",
       "events",
       "folders",
+      "followUps",
       "goalRelations",
       "goals",
       "habits",
+      "interactions",
       "localBookmarks",
       "milestones",
       "noteDrafts",
       "notes",
       "notificationOccurrences",
+      "people",
       "pluginInstanceData",
       "pluginPackages",
       "probes",
@@ -157,7 +160,7 @@ describe("Dexie version 3 migration", () => {
     });
     version4.close();
     await db.open();
-    expect(db.verno).toBe(10);
+    expect(db.verno).toBe(11);
     expect(await db.probes.get(probe.id)).toMatchObject({ state: "pending" });
     expect(
       await db.notes.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
@@ -288,7 +291,7 @@ it("preserves a realistic version 6 workspace and persists habit check-ins after
   });
   legacy.close();
   await db.open();
-  expect(db.verno).toBe(10);
+  expect(db.verno).toBe(11);
   expect(db.tables.some((table) => table.name === "habits")).toBe(true);
   expect((await db.profiles.get(profileId))?.id).toBe(profileId);
   expect((await db.widgets.toArray())[0]?.profileId).toBe(profileId);
@@ -333,6 +336,9 @@ it("adds the habit reminder index from v7 while preserving event and task remind
             "weeklyReviews",
             "reviewSchedules",
             "reviewHistory",
+            "people",
+            "followUps",
+            "interactions",
           ].includes(String(name)) === false,
       ),
   );
@@ -375,7 +381,7 @@ it("adds the habit reminder index from v7 while preserving event and task remind
   await legacy.table("notificationOccurrences").put(oldNotification);
   legacy.close();
   await db.open();
-  expect(db.verno).toBe(10);
+  expect(db.verno).toBe(11);
   expect(await db.reminderRules.get(eventRule)).toMatchObject({
     eventId: "33333333-3333-4333-8333-333333333333",
     taskId: null,
@@ -391,7 +397,7 @@ it("adds the habit reminder index from v7 while preserving event and task remind
   db.close();
 });
 
-it("additively upgrades a realistic v8 workspace to v9 and persists Goals records", async () => {
+it("additively upgrades a realistic v8 workspace through v11 and persists Goals records", async () => {
   const { createGoals } = await import("../../src/application/goals");
   const { db, goalsDb } = await import("../../src/infrastructure/db");
   if (db.isOpen()) db.close();
@@ -407,6 +413,9 @@ it("additively upgrades a realistic v8 workspace to v9 and persists Goals record
             "weeklyReviews",
             "reviewSchedules",
             "reviewHistory",
+            "people",
+            "followUps",
+            "interactions",
           ].includes(table.name),
       )
       .map((table) => {
@@ -479,7 +488,7 @@ it("additively upgrades a realistic v8 workspace to v9 and persists Goals record
   legacy.close();
 
   await db.open();
-  expect(db.verno).toBe(10);
+  expect(db.verno).toBe(11);
   expect(db.tables.some((table) => table.name === "goals")).toBe(true);
   expect(db.goals.schema.idxByName.profileId).toBeDefined();
   expect(
@@ -512,7 +521,7 @@ it("additively upgrades a realistic v8 workspace to v9 and persists Goals record
   db.close();
 });
 
-it("additively upgrades a realistic v9 workspace to v10 and preserves records while persisting review history", async () => {
+it("additively upgrades a realistic v9 workspace through v11 and preserves records while persisting review history", async () => {
   const { createReviews } = await import("../../src/application/reviews");
   const { db, reviewsDb } = await import("../../src/infrastructure/db");
   if (db.isOpen()) db.close();
@@ -520,7 +529,14 @@ it("additively upgrades a realistic v9 workspace to v10 and preserves records wh
   const v9Stores = Object.fromEntries(
     db.tables
       .filter(
-        (table) => !["reviewSchedules", "reviewHistory"].includes(table.name),
+        (table) =>
+          ![
+            "reviewSchedules",
+            "reviewHistory",
+            "people",
+            "followUps",
+            "interactions",
+          ].includes(table.name),
       )
       .map((table) => {
         const indexes = table.schema.indexes.map((index) => index.src);
@@ -587,7 +603,7 @@ it("additively upgrades a realistic v9 workspace to v10 and preserves records wh
   legacy.close();
 
   await db.open();
-  expect(db.verno).toBe(10);
+  expect(db.verno).toBe(11);
   expect(
     db.reviewSchedules.schema.idxByName["[profileId+noteId]"],
   ).toBeDefined();
@@ -616,5 +632,159 @@ it("additively upgrades a realistic v9 workspace to v10 and preserves records wh
     intervalDays: 3,
   });
   expect(loaded.schedules[0]?.history).toHaveLength(1);
+  db.close();
+});
+
+it("additively upgrades a realistic v10 workspace to v11 and preserves every existing record while persisting People data", async () => {
+  const { createPeople } = await import("../../src/application/people");
+  const { db, peopleDb } = await import("../../src/infrastructure/db");
+  if (db.isOpen()) db.close();
+  await Dexie.delete("Venus-p00");
+  const v10Stores = Object.fromEntries(
+    db.tables
+      .filter(
+        (table) =>
+          !["people", "followUps", "interactions"].includes(table.name),
+      )
+      .map((table) => [
+        table.name,
+        [
+          table.schema.primKey.src,
+          ...table.schema.indexes.map((index) => index.src),
+        ]
+          .filter(Boolean)
+          .join(", "),
+      ]),
+  );
+  // v10 did not have the followUpId index.
+  v10Stores.reminderRules = "id, eventId, taskId, habitId";
+  const legacy = new Dexie("Venus-p00");
+  legacy.version(10).stores(v10Stores);
+  const profileId = "12121212-1212-4121-8121-121212121212";
+  const noteId = "13131313-1313-4131-8131-131313131313";
+  const goalId = "14141414-1414-4141-8141-141414141414";
+  const habitId = "15151515-1515-4151-8151-151515151515";
+  const ruleId = "16161616-1616-4161-8161-161616161616";
+  await legacy.table("profiles").put({
+    id: profileId,
+    title: "Kept profile",
+    revision: 7,
+    createdAt: "2026-10-20T00:00:00.000Z",
+    updatedAt: "2026-10-20T00:00:00.000Z",
+  });
+  await legacy.table("notes").put({
+    id: noteId,
+    title: "Kept note",
+    body: { type: "doc", content: [] },
+    folderId: null,
+    tags: [],
+    pinned: false,
+    archived: false,
+    trashedAt: null,
+    revision: 4,
+    createdAt: "2026-10-20T00:00:00.000Z",
+    updatedAt: "2026-10-20T00:00:00.000Z",
+  });
+  await legacy.table("goals").put({
+    id: goalId,
+    profileId,
+    title: "Kept goal",
+    description: "",
+    status: "active",
+    startDate: "2026-10-20",
+    targetDate: null,
+    progress: { mode: "manual", target: 1, current: 0 },
+    revision: 3,
+    createdAt: "2026-10-20T00:00:00.000Z",
+    updatedAt: "2026-10-20T00:00:00.000Z",
+  });
+  await legacy.table("habits").put({
+    id: habitId,
+    title: "Kept habit",
+    frequency: "daily",
+    reminder: null,
+    checkIns: ["2026-10-20"],
+    revision: 2,
+    createdAt: "2026-10-20T00:00:00.000Z",
+    updatedAt: "2026-10-20T00:00:00.000Z",
+  });
+  await legacy.table("reminderRules").put({
+    id: ruleId,
+    eventId: null,
+    taskId: null,
+    habitId,
+    offsetMinutes: null,
+    absoluteTime: null,
+    severity: "normal",
+    quietHoursOverride: false,
+  });
+  await legacy.table("reviewSchedules").put({
+    id: "17171717-1717-4171-8171-171717171717",
+    profileId,
+    noteId,
+    state: "active",
+    dueDate: "2026-10-21",
+    lastReviewedDate: null,
+    intervalDays: 1,
+    repetitions: 0,
+    revision: 2,
+    createdAt: "2026-10-20T00:00:00.000Z",
+    updatedAt: "2026-10-20T00:00:00.000Z",
+  });
+  legacy.close();
+
+  await db.open();
+  expect(db.verno).toBe(11);
+  expect(db.people.schema.idxByName.profileId).toBeDefined();
+  expect(db.followUps.schema.idxByName["[profileId+personId]"]).toBeDefined();
+  expect(db.reminderRules.schema.idxByName.followUpId).toBeDefined();
+  expect((await db.profiles.get(profileId))?.revision).toBe(7);
+  expect((await db.notes.get(noteId))?.id).toBe(noteId);
+  expect((await db.goals.get(goalId))?.id).toBe(goalId);
+  expect((await db.habits.get(habitId))?.checkIns).toEqual(["2026-10-20"]);
+  expect((await db.reminderRules.get(ruleId))?.habitId).toBe(habitId);
+  expect(await db.reviewSchedules.toArray()).toHaveLength(1);
+  const people = createPeople(peopleDb);
+  const person = await people.createPerson(profileId, {
+    displayName: "Migration person",
+    organization: null,
+    role: null,
+    email: null,
+    phone: null,
+    tags: [],
+    relationshipNotes: "",
+  });
+  const followUp = await people.createFollowUp(profileId, {
+    personId: person.id,
+    title: "Persist",
+    dueDate: "2026-10-22",
+    dueTime: "09:00",
+    timeZone: "UTC",
+    priority: "normal",
+    contactMethod: "email",
+    reminderEnabled: false,
+  });
+  await people.recordInteraction(profileId, {
+    personId: person.id,
+    followUpId: followUp.id,
+    kind: "note",
+    body: "Migrated safely",
+    occurredAt: "2026-10-21T10:00:00.000Z",
+  });
+  db.close();
+  await db.open();
+  expect(await db.people.get(person.id)).toMatchObject({
+    displayName: "Migration person",
+    profileId,
+  });
+  expect(await db.followUps.get(followUp.id)).toMatchObject({
+    title: "Persist",
+    personId: person.id,
+  });
+  expect(
+    (await db.interactions.toArray()).filter(
+      (row) => row.personId === person.id,
+    ),
+  ).toHaveLength(1);
   db.close();
 });

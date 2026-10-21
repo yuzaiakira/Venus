@@ -33,6 +33,7 @@ import { translate, type MessageKey } from "../locales/messages";
 import type { createCalendar } from "../application/calendar";
 import type { Goals, GoalsWorkspace } from "../application/goals";
 import type { Reviews, ReviewsWorkspace } from "../application/reviews";
+import type { People, PeopleWorkspace } from "../application/people";
 import type { PluginPlatform } from "../application/plugins";
 import type {
   EventRecord,
@@ -48,6 +49,7 @@ import { LibraryScreen } from "./library";
 import { HabitsScreen } from "./habits";
 import { GoalsScreen } from "./goals";
 import { ReviewsScreen } from "./reviews";
+import { PeopleScreen } from "./people";
 import { PluginStudio, PluginWidget } from "./plugin-studio";
 import { SettingsScreen } from "./settings";
 import { Icon } from "./icons";
@@ -66,6 +68,7 @@ export function DashboardScreen(props: {
   calendar: ReturnType<typeof createCalendar>;
   goals: Goals;
   reviews: Reviews;
+  people: People;
   plugins: PluginPlatform;
   online: boolean;
 }) {
@@ -95,6 +98,9 @@ export function DashboardScreen(props: {
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [focusedHabitId, setFocusedHabitId] = useState<string | null>(null);
+  const [focusedFollowUpId, setFocusedFollowUpId] = useState<string | null>(
+    null,
+  );
   const [taskDialogId, setTaskDialogId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const loadSequence = useRef(0);
@@ -102,6 +108,7 @@ export function DashboardScreen(props: {
   const [library, setLibrary] = useState<Library | null>(null);
   const [goalsData, setGoalsData] = useState<GoalsWorkspace | null>(null);
   const [reviewsData, setReviewsData] = useState<ReviewsWorkspace | null>(null);
+  const [peopleData, setPeopleData] = useState<PeopleWorkspace | null>(null);
   const [view, setView] = useState<
     | "home"
     | "notes"
@@ -113,6 +120,7 @@ export function DashboardScreen(props: {
     | "habits"
     | "goals"
     | "reviews"
+    | "people"
   >("home");
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [reminders, setReminders] = useState<NotificationRecord[]>([]);
@@ -159,15 +167,17 @@ export function DashboardScreen(props: {
       const today = new Intl.DateTimeFormat("en-CA", {
         timeZone: next.bootstrap.timeZone,
       }).format(new Date());
-      const [goalContent, reviewContent] = await Promise.all([
+      const [goalContent, reviewContent, peopleContent] = await Promise.all([
         props.goals.load(next.bootstrap.selectedProfileId),
         props.reviews.load(next.bootstrap.selectedProfileId, today),
+        props.people.load(next.bootstrap.selectedProfileId, today),
       ]);
       if (sequence !== loadSequence.current) return;
       setSnapshot(next);
       setLibrary(content);
       setGoalsData(goalContent);
       setReviewsData(reviewContent);
+      setPeopleData(peopleContent);
       setEvents(schedule.events);
       setReminders(schedule.notifications);
       setQuiet(schedule.quietHours);
@@ -189,6 +199,7 @@ export function DashboardScreen(props: {
     props.calendar,
     props.goals,
     props.reviews,
+    props.people,
   ]);
   async function completeOnboarding() {
     const bootstrap = await props.workspace.updatePreferences({
@@ -452,6 +463,11 @@ export function DashboardScreen(props: {
       id: "reviews" as const,
       icon: "note" as const,
       label: t("nav.reviews"),
+    },
+    {
+      id: "people" as const,
+      icon: "note" as const,
+      label: t("nav.people"),
     },
     {
       id: "calendar" as const,
@@ -793,6 +809,11 @@ export function DashboardScreen(props: {
                   setBell(false);
                   setView("habits");
                 }}
+                onOpenFollowUp={(id) => {
+                  setFocusedFollowUpId(id);
+                  setBell(false);
+                  setView("people");
+                }}
                 onChanged={reload}
               />
             ) : null}
@@ -873,6 +894,28 @@ export function DashboardScreen(props: {
                   setSelectedNoteId(id);
                   setView("notes");
                 }}
+              />
+            ) : null}
+            {view === "people" && peopleData ? (
+              <PeopleScreen
+                profileId={profile.id}
+                data={peopleData}
+                people={props.people}
+                calendarPermission={() =>
+                  props.calendar.notificationPermission()
+                }
+                locale={snapshot.bootstrap.locale}
+                timeZone={snapshot.bootstrap.timeZone}
+                online={online}
+                onChanged={reload}
+                requestNotificationPermission={async () => {
+                  const { requestOptional } = await import(
+                    "../infrastructure/browser-workspace"
+                  );
+                  const result = await requestOptional("notifications");
+                  return result === "unresolved" ? "failed" : result;
+                }}
+                focusFollowUpId={focusedFollowUpId}
               />
             ) : null}
             {view === "home" ? (
@@ -975,7 +1018,8 @@ export function DashboardScreen(props: {
             view !== "settings" &&
             view !== "habits" &&
             view !== "goals" &&
-            view !== "reviews" ? (
+            view !== "reviews" &&
+            view !== "people" ? (
               <LibraryScreen
                 view={view}
                 selectedNoteId={selectedNoteId}
@@ -1025,7 +1069,9 @@ export function DashboardScreen(props: {
                                   ? () => setView("goals")
                                   : widget.widgetType === "reviews"
                                     ? () => setView("reviews")
-                                    : undefined;
+                                    : widget.widgetType === "people"
+                                      ? () => setView("people")
+                                      : undefined;
                     return (
                       <article
                         key={widget.id}
@@ -1113,6 +1159,7 @@ export function DashboardScreen(props: {
                                 habits={library?.habits ?? []}
                                 goals={goalsData?.goals ?? []}
                                 reviews={reviewsData?.schedules ?? []}
+                                people={peopleData}
                                 bookmarks={library?.bookmarks ?? []}
                                 events={events}
                                 timer={activeTimer}
@@ -1567,6 +1614,7 @@ function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
     habits: "widget.habitsTitle",
     goals: "widget.goalsTitle",
     reviews: "widget.reviewsTitle",
+    people: "widget.peopleTitle",
   };
   return t(labels[type]);
 }

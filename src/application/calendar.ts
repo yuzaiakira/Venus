@@ -40,6 +40,7 @@ import {
 } from "../domain/time/schedule";
 import { VenusTemporal } from "../domain/time/temporal";
 import { habitSchema, type HabitRecord } from "../domain/productivity";
+import { followUpSchema, type FollowUpRecord } from "../domain/people";
 
 const sweepAlarm = "venus-sweep";
 
@@ -48,6 +49,12 @@ export interface CalendarDatabase {
     get(id: string): Promise<HabitRecord | undefined>;
     toArray(): Promise<HabitRecord[]>;
     put(row: HabitRecord): Promise<unknown>;
+    delete(id: string): Promise<void>;
+  };
+  followUps: {
+    get(id: string): Promise<FollowUpRecord | undefined>;
+    toArray(): Promise<FollowUpRecord[]>;
+    put(row: FollowUpRecord): Promise<unknown>;
     delete(id: string): Promise<void>;
   };
   events: {
@@ -114,6 +121,7 @@ export function createCalendar(input: {
     saveEvent,
     replaceRules,
     configureHabitReminder,
+    syncFollowUp,
     updateHabit,
     deleteHabit,
     notificationPermission: () => input.notifications.permission(),
@@ -506,6 +514,140 @@ export function createCalendar(input: {
           internalStatus: "cancelled",
         });
   }
+  /**
+   * Follow-ups use the same durable occurrence table and alarm sweep as events
+   * and habits. The record remains in the due queue even when native delivery
+   * is denied; this only controls the optional notification occurrence.
+   */
+  async function syncFollowUp(id: string) {
+    await input.database.transaction(async () => {
+      const followUp = await input.database.followUps.get(id);
+      const rules = (await input.database.reminderRules.toArray())
+        .filter((rule) => rule.followUpId === id)
+        .sort((left, right) => left.id.localeCompare(right.id));
+      if (
+        !followUp ||
+        followUp.status === "completed" ||
+        !followUp.reminderEnabled ||
+        !followUp.dueTime
+      ) {
+        await cancelFollowUpFuture(id);
+        for (const rule of rules)
+          await input.database.reminderRules.delete(rule.id);
+        return;
+      }
+      const primary =
+        rules[0] ??
+        reminderRuleSchema.parse({
+          id: crypto.randomUUID(),
+          eventId: null,
+          taskId: null,
+          habitId: null,
+          followUpId: followUp.id,
+          offsetMinutes: null,
+          absoluteTime: null,
+          severity: followUp.priority === "high" ? "important" : "normal",
+          quietHoursOverride: false,
+        });
+      if (!rules.length) await input.database.reminderRules.put(primary);
+      for (const extra of rules.slice(1)) {
+        await input.database.reminderRules.delete(extra.id);
+        for (const row of await input.database.notificationOccurrences.toArray())
+          if (
+            row.ruleId === extra.id &&
+            ["pending", "due"].includes(row.internalStatus)
+          )
+            await input.database.notificationOccurrences.put({
+              ...row,
+              internalStatus: "cancelled",
+            });
+      }
+      await materializeFollowUp(followUp, primary);
+    });
+    await armSweep();
+  }
+  async function cancelFollowUpFuture(id: string) {
+    for (const row of await input.database.notificationOccurrences.toArray())
+      if (
+        row.ownerId === id &&
+        row.sourceKind === "followup" &&
+        ["pending", "due"].includes(row.internalStatus)
+      )
+        await input.database.notificationOccurrences.put({
+          ...row,
+          internalStatus: "cancelled",
+        });
+  }
+  async function materializeFollowUp(
+    followUp: FollowUpRecord,
+    rule: ReminderRuleRecord,
+  ) {
+    if (
+      followUp.status !== "open" ||
+      !followUp.reminderEnabled ||
+      !followUp.dueTime
+    ) {
+      await cancelFollowUpFuture(followUp.id);
+      return;
+    }
+    const [hour, minute] = followUp.dueTime.split(":").map(Number);
+    const [year, month, day] = followUp.dueDate.split("-").map(Number);
+    const scheduled =
+      followUp.snoozedUntilUTC && followUp.snoozedUntilUTC > now()
+        ? followUp.snoozedUntilUTC
+        : resolveWallTime({
+            date: {
+              calendar: "gregorian",
+              year: year!,
+              month: month!,
+              day: day!,
+            },
+            wall: { hour: hour!, minute: minute!, second: 0 },
+            timeZone: followUp.timeZone,
+            foldPolicy: "earlier",
+          }).instant.epochMs;
+    // A revision is part of the occurrence key so an edited follow-up creates
+    // a fresh future occurrence instead of reviving a previously cancelled one.
+    const occurrence = `followup:${followUp.id}:${followUp.revision}:${followUp.dueDate}`;
+    const key = idempotencyKey({
+      ownerId: followUp.id,
+      ruleId: rule.id,
+      occurrenceKey: occurrence,
+      scheduledInstant: scheduled,
+      attempt: 1,
+    });
+    for (const row of await input.database.notificationOccurrences.toArray())
+      if (
+        row.ownerId === followUp.id &&
+        row.sourceKind === "followup" &&
+        ["pending", "due"].includes(row.internalStatus) &&
+        row.idempotencyKey !== key
+      )
+        await input.database.notificationOccurrences.put({
+          ...row,
+          internalStatus: "cancelled",
+        });
+    if (await input.database.notificationOccurrences.get(key)) return;
+    await input.database.notificationOccurrences.put(
+      notificationSchema.parse({
+        idempotencyKey: key,
+        ownerId: followUp.id,
+        ruleId: rule.id,
+        occurrenceKey: occurrence,
+        fireAtUTC: scheduled,
+        internalStatus: "pending",
+        read: false,
+        seenMissed: false,
+        nativeAttempt: "not_started",
+        nativeApiStatus: null,
+        osDisplay: "unobserved",
+        attempt: 1,
+        quietHoursOverride: rule.quietHoursOverride,
+        sourceKind: "followup",
+        title: followUp.title,
+      }),
+    );
+  }
   async function cancelFuture(ownerId: string) {
     const rows = await input.database.notificationOccurrences.toArray();
     for (const row of rows) {
@@ -634,10 +776,30 @@ export function createCalendar(input: {
     return pruneHistory(rows, now());
   }
   async function snooze(key: string, minutes: number) {
-    const result = await input.database.transaction(async () => {
+    const followUpId = await input.database.transaction(async () => {
       const row = await must(key);
       if (!["pending", "due", "missed"].includes(row.internalStatus))
         throw new WorkspaceError("conflict");
+      if (row.sourceKind === "followup") {
+        const followUp = await input.database.followUps.get(row.ownerId);
+        if (!followUp || followUp.status !== "open")
+          throw new WorkspaceError("notFound");
+        const until = now() + minutes * 60_000;
+        await input.database.followUps.put(
+          followUpSchema.parse({
+            ...followUp,
+            snoozedUntilUTC: until,
+            revision: followUp.revision + 1,
+            updatedAt: new Date(now()).toISOString(),
+          }),
+        );
+        await input.database.notificationOccurrences.put({
+          ...row,
+          internalStatus: "snoozed",
+          read: true,
+        });
+        return followUp.id;
+      }
       const next = snoozeRow(row, now() + minutes * 60_000);
       await input.database.notificationOccurrences.put({
         ...row,
@@ -646,9 +808,10 @@ export function createCalendar(input: {
       await input.database.notificationOccurrences.put(
         notificationSchema.parse(next),
       );
+      return null;
     });
-    await armSweep();
-    return result;
+    if (followUpId) await syncFollowUp(followUpId);
+    else await armSweep();
   }
   async function dismiss(key: string) {
     await input.database.transaction(async () => {
@@ -679,6 +842,35 @@ export function createCalendar(input: {
     if (row.sourceKind === "task") {
       if (!input.completeTask) throw new WorkspaceError("invalidInput");
       await input.completeTask(row.ownerId, taskRevision);
+    }
+    if (row.sourceKind === "followup") {
+      await input.database.transaction(async () => {
+        const fresh = await input.database.notificationOccurrences.get(key);
+        if (!fresh) throw new WorkspaceError("notFound");
+        if (fresh.internalStatus === "completed") return;
+        if (fresh.internalStatus === "cancelled")
+          throw new WorkspaceError("conflict");
+        const followUp = await input.database.followUps.get(fresh.ownerId);
+        if (!followUp) throw new WorkspaceError("notFound");
+        if (followUp.status !== "completed")
+          await input.database.followUps.put(
+            followUpSchema.parse({
+              ...followUp,
+              status: "completed",
+              completedAt: new Date(now()).toISOString(),
+              snoozedUntilUTC: null,
+              revision: followUp.revision + 1,
+              updatedAt: new Date(now()).toISOString(),
+            }),
+          );
+        await input.database.notificationOccurrences.put({
+          ...fresh,
+          internalStatus: "completed",
+          read: true,
+        });
+      });
+      await syncFollowUp(row.ownerId);
+      return;
     }
     if (row.sourceKind === "habit") {
       await input.database.transaction(async () => {
@@ -797,6 +989,26 @@ export function createCalendar(input: {
         if (fresh?.recurrenceSpec) await materialize(fresh);
       });
     }
+    for (const followUp of await input.database.followUps.toArray())
+      await syncFollowUp(followUp.id);
+    await input.database.transaction(async () => {
+      const existingFollowUpIds = new Set(
+        (await input.database.followUps.toArray()).map((row) => row.id),
+      );
+      for (const rule of await input.database.reminderRules.toArray())
+        if (rule.followUpId && !existingFollowUpIds.has(rule.followUpId))
+          await input.database.reminderRules.delete(rule.id);
+      for (const row of await input.database.notificationOccurrences.toArray())
+        if (
+          row.sourceKind === "followup" &&
+          !existingFollowUpIds.has(row.ownerId) &&
+          ["pending", "due"].includes(row.internalStatus)
+        )
+          await input.database.notificationOccurrences.put({
+            ...row,
+            internalStatus: "cancelled",
+          });
+    });
     await input.database.transaction(async () => {
       const habits = await input.database.habits.toArray();
       const activeHabitIds = new Set(

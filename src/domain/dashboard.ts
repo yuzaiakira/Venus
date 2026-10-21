@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const workspaceSchemaVersion = 7;
+export const workspaceSchemaVersion = 8;
 export const logicalColumns = 4;
 export const maxAssetBytes = 5 * 1024 * 1024;
 export const maxAssetPixels = 8_000_000;
@@ -28,6 +28,7 @@ export const widgetTypes = [
   "habits",
   "goals",
   "reviews",
+  "people",
 ] as const;
 export const sharedKinds = ["note", "task", "event", "bookmark"] as const;
 export const allowedMime = ["image/png", "image/jpeg", "image/webp"] as const;
@@ -64,6 +65,7 @@ export const ModuleFlagsSchema = z
     habits: z.boolean(),
     goals: z.boolean(),
     reviews: z.boolean(),
+    people: z.boolean(),
   })
   .strict();
 export const BootstrapSchema = z
@@ -163,6 +165,8 @@ export const defaultModules: Bootstrap["modules"] = {
   goals: true,
   // Knowledge Review is opt-in and is never inserted into a saved layout.
   reviews: true,
+  // People & Follow-ups is opt-in and is never inserted into a saved layout.
+  people: true,
 };
 
 export function defaultBootstrap(timeZone = "UTC"): Bootstrap {

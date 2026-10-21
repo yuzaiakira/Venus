@@ -2,9 +2,17 @@ import { liveQuery } from "dexie";
 import { browser } from "wxt/browser";
 import { createCalendar } from "../application/calendar";
 import { createGoals } from "../application/goals";
+import { createPeople } from "../application/people";
 import { createReviews } from "../application/reviews";
 import { createProductivity } from "../application/productivity";
-import { calendarDb, db, goalsDb, productivityDb, reviewsDb } from "./db";
+import {
+  calendarDb,
+  db,
+  goalsDb,
+  peopleDb,
+  productivityDb,
+  reviewsDb,
+} from "./db";
 import { productNotifications, sweepAlarmPort } from "./browser";
 import {
   createWorkspace,
@@ -48,6 +56,9 @@ export const workspace = createWorkspace(
           db.weeklyReviews.toArray(),
           db.reviewSchedules.toArray(),
           db.reviewHistory.toArray(),
+          db.people.toArray(),
+          db.followUps.toArray(),
+          db.interactions.toArray(),
           db.timerSessions.toArray(),
           db.notificationOccurrences.toArray(),
           db.quietHours.toArray(),
@@ -98,6 +109,10 @@ export const calendar = (calendarApi = createCalendar({
     });
   },
 }));
+
+export const people = createPeople(peopleDb, publish, {
+  syncFollowUp: (id) => calendar.syncFollowUp(id),
+});
 
 export async function requestOptional(
   name: "bookmarks" | "notifications",

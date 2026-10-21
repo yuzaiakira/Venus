@@ -49,7 +49,7 @@ equivalent transactional service operation.
 | Goals & Progress    | Connect work to outcomes            | Goals, time frame, measurable progress, linked tasks/habits, milestones, weekly review             | Local goal, milestone and relation records                        | 🟡 Implementation verified; browser acceptance pending |
 | Weather & Commute   | Prepare for the next commitment     | Location consent, forecast, event travel buffer, refresh time, graceful unavailable state          | Location/network are opt-in; cache minimally                      | ⬜ Planned                                             |
 | Focus Coach         | Protect usable focus time           | Free-time suggestions, start timer, defer/snooze, explain conflicts, never auto-edit calendar      | Reads local tasks/events/timer; recommendations local first       | ⬜ Planned                                             |
-| People & Follow-ups | Remember relationships and promises | People, next follow-up, notes, contact method, snooze/done, due reminders                          | Local people/follow-up records; no address-book access by default | ⬜ Planned                                             |
+| People & Follow-ups | Remember relationships and promises | People, next follow-up, notes, contact method, snooze/done, due reminders                          | Local people/follow-up records; no address-book access by default | 🟡 Implementation verified; browser acceptance pending |
 | Finance Snapshot    | See commitments and budget          | Manual accounts/categories, monthly budget, upcoming bills, totals, period selector, export/delete | Local financial records; no banking connection by default         | ⬜ Planned                                             |
 | Knowledge Review    | Revisit useful information          | Spaced review queue, surface notes, rate recall, postpone, links to notes                          | Local note-review schedule only                                   | 🟡 Implementation verified; browser acceptance pending |
 
@@ -63,8 +63,8 @@ equivalent transactional service operation.
 4. **Habit Tracker** — local schema, history, dashboard card and reminder workflow. 🟡 Implementation verified; browser acceptance pending.
 5. **Goals & Progress** — goals/milestones and task/habit links. 🟡 Implementation verified; browser acceptance pending.
 6. **Knowledge Review** — review scheduling for existing notes. 🟡 Implementation verified; browser acceptance pending.
-7. **People & Follow-ups** — local CRM-style follow-up flow. ⬜ **Next milestone**
-8. **Focus Coach** — explainable schedule-aware suggestions. ⬜
+7. **People & Follow-ups** — local CRM-style follow-up flow. 🟡 Implementation verified; browser acceptance pending.
+8. **Focus Coach** — explainable schedule-aware suggestions. ⬜ **Next milestone**
 9. **AI Inbox** — local triage queue; remote provider only after an explicit
    product decision and consent design. ⬜
 10. **Weather & Commute** — only after a documented provider, location and
@@ -116,7 +116,7 @@ gate while this cloud environment cannot launch a supported browser.
   Tracker browser evidence and is not inferred from builds or automated data
   tests.
 - **Release readiness:** browser acceptance remains open; the next independent
-  PDR delivery milestone is **People & Follow-ups**.
+  PDR delivery milestone is **Focus Coach**.
 
 ## Knowledge Review verification status — 2026-10-21
 
@@ -146,6 +146,40 @@ gate while this cloud environment cannot launch a supported browser.
   open until the extension is exercised in official Firefox and secure
   sandboxed Chromium, including responsive RTL review interactions. Operating
   system notification display is not part of this local review feature.
+
+## People & Follow-ups verification status — 2026-10-21
+
+- **Implementation and automated tests:** verified. Dexie v11 adds only local,
+  profile-owned people, follow-ups and interaction history, plus an additive
+  `followUpId` reminder-rule index. The v10 → v11 upgrade test preserves
+  profiles, notes, goals, habits, review schedules and existing reminder rules
+  before reopening and persisting People records. Person, follow-up and
+  interaction mutations validate with Zod, isolate profiles and use
+  revision-aware transactions. Deleting a person requires explicit confirmation
+  and deletes only that person's follow-ups, interactions and pending reminder
+  records.
+- **PDR widget acceptance:** implemented. The responsive People module supports
+  contact details, relationship notes, search, archive/restore, interaction
+  history, follow-up creation/editing/completion/reopening/snoozing/deletion,
+  due queues and filters. Due queues remain visible when notification permission
+  is missing or denied. The opt-in singleton dashboard card is available through
+  **Customize → Add widget**, summarizes due/overdue/next work, persists its
+  placement and never deletes data when removed.
+- **Reminder lifecycle:** implemented with the existing Calendar alarm and
+  notification-occurrence lifecycle. Follow-up reminders resolve the saved IANA
+  timezone and wall time, use revision-scoped idempotency keys, respect quiet
+  hours and permission outcomes, recover through reconciliation, and cancel
+  pending occurrences on edits, disablement, completion or deletion. Notification
+  Center can open, snooze, dismiss and complete the intended follow-up. API
+  acceptance remains separate from operating-system notification display.
+- **Real-browser acceptance:** pending. The local cloud environment cannot
+  launch a supported Firefox or securely sandboxed Chromium. Existing Habit
+  browser checks are not evidence for People & Follow-ups, Goals & Progress or
+  Knowledge Review.
+- **Release readiness:** implementation is verified; browser acceptance remains
+  open until the extension is exercised in official Firefox and secure sandboxed
+  Chromium, including responsive RTL People interactions. The next independent
+  PDR delivery milestone is **Focus Coach**.
 
 ## Non-goals for this delivery
 

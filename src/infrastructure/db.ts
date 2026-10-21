@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from "dexie";
 import type { CalendarDatabase } from "../application/calendar";
 import type { GoalsDatabase } from "../application/goals";
 import type { ReviewsDatabase } from "../application/reviews";
+import type { PeopleDatabase } from "../application/people";
 import type { ProductivityDatabase } from "../application/productivity";
 import type {
   AssetRecord,
@@ -30,6 +31,11 @@ import type {
   ReviewScheduleRecord,
 } from "../domain/reviews";
 import type {
+  FollowUpRecord,
+  InteractionRecord,
+  PersonRecord,
+} from "../domain/people";
+import type {
   PluginInstanceRecord,
   PluginPackageRecord,
 } from "../domain/plugins/records";
@@ -57,6 +63,9 @@ export const db = new Dexie("Venus-p00") as Dexie & {
   weeklyReviews: EntityTable<WeeklyReviewRecord, "id">;
   reviewSchedules: EntityTable<ReviewScheduleRecord, "id">;
   reviewHistory: EntityTable<ReviewHistoryRecord, "id">;
+  people: EntityTable<PersonRecord, "id">;
+  followUps: EntityTable<FollowUpRecord, "id">;
+  interactions: EntityTable<InteractionRecord, "id">;
   localBookmarks: EntityTable<LocalBookmarkRecord, "id">;
   bookmarkSnapshots: EntityTable<BookmarkSnapshotRecord, "id">;
   events: EntityTable<EventRecord, "id">;
@@ -175,6 +184,15 @@ db.version(10).stores({
   reviewSchedules: "id, profileId, noteId, [profileId+noteId], state, dueDate",
   reviewHistory: "id, scheduleId, profileId, noteId, reviewedDate, outcome",
 });
+// v11 is additive: profile-owned people, follow-ups and interaction history.
+// The follow-up reminder index keeps existing event/task/habit rules intact.
+db.version(11).stores({
+  people: "id, profileId, status, displayName, updatedAt",
+  followUps:
+    "id, profileId, personId, [profileId+personId], status, dueDate, priority, contactMethod",
+  interactions: "id, profileId, personId, followUpId, occurredAt",
+  reminderRules: "id, eventId, taskId, habitId, followUpId",
+});
 export const productivityDb: ProductivityDatabase = {
   notes: db.notes,
   noteDrafts: db.noteDrafts,
@@ -200,6 +218,7 @@ export const productivityDb: ProductivityDatabase = {
 };
 export const calendarDb: CalendarDatabase = {
   habits: db.habits,
+  followUps: db.followUps,
   events: db.events,
   reminderRules: db.reminderRules,
   notificationOccurrences: db.notificationOccurrences,
@@ -215,7 +234,20 @@ export const calendarDb: CalendarDatabase = {
         db.timerSessions,
         db.quietHours,
         db.habits,
+        db.followUps,
       ],
+      work,
+    ),
+};
+export const peopleDb: PeopleDatabase = {
+  profiles: db.profiles,
+  people: db.people,
+  followUps: db.followUps,
+  interactions: db.interactions,
+  transaction: (_mode, _tables, work) =>
+    db.transaction(
+      "rw",
+      [db.profiles, db.people, db.followUps, db.interactions],
       work,
     ),
 };

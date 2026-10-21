@@ -17,6 +17,7 @@ export function NotificationCenter(props: {
   calendar: CalendarApi;
   onChanged: () => Promise<void>;
   onOpenHabit: (habitId: string) => void;
+  onOpenFollowUp: (followUpId: string) => void;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
   const [error, setError] = useState("");
@@ -46,6 +47,7 @@ export function NotificationCenter(props: {
         calendar={props.calendar}
         onChanged={props.onChanged}
         onOpenHabit={props.onOpenHabit}
+        onOpenFollowUp={props.onOpenFollowUp}
       />
       <h3>{t("notify.open")}</h3>
       <NotificationList
@@ -54,6 +56,7 @@ export function NotificationCenter(props: {
         calendar={props.calendar}
         onChanged={props.onChanged}
         onOpenHabit={props.onOpenHabit}
+        onOpenFollowUp={props.onOpenFollowUp}
       />
       <h3>{t("notify.history")}</h3>
       <NotificationList
@@ -62,6 +65,7 @@ export function NotificationCenter(props: {
         calendar={props.calendar}
         onChanged={props.onChanged}
         onOpenHabit={props.onOpenHabit}
+        onOpenFollowUp={props.onOpenFollowUp}
       />
       <form
         onSubmit={(event) => {
@@ -118,6 +122,7 @@ function NotificationList(props: {
   calendar: CalendarApi;
   onChanged: () => Promise<void>;
   onOpenHabit: (habitId: string) => void;
+  onOpenFollowUp: (followUpId: string) => void;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
   const [error, setError] = useState("");
@@ -138,6 +143,15 @@ function NotificationList(props: {
               onClick={() => props.onOpenHabit(row.ownerId)}
             >
               {t("habits.openFromReminder")}
+            </button>
+          ) : null}
+          {row.sourceKind === "followup" ? (
+            <button
+              className="btn"
+              type="button"
+              onClick={() => props.onOpenFollowUp(row.ownerId)}
+            >
+              {t("people.openFromReminder")}
             </button>
           ) : null}
           <button

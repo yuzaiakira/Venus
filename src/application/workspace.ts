@@ -290,6 +290,11 @@ export function createWorkspace(
         db.weeklyReviews,
         db.reviewSchedules,
         db.reviewHistory,
+        db.people,
+        db.followUps,
+        db.interactions,
+        db.reminderRules,
+        db.notificationOccurrences,
       ],
       async () => {
         await db.widgets.where("profileId").equals(id).delete();
@@ -315,6 +320,31 @@ export function createWorkspace(
             await db.reviewHistory.delete(history.id);
         for (const schedule of schedules)
           await db.reviewSchedules.delete(schedule.id);
+        const people = await db.people.where("profileId").equals(id).toArray();
+        const personIds = new Set(people.map((person) => person.id));
+        const followUps = await db.followUps
+          .where("profileId")
+          .equals(id)
+          .toArray();
+        const followUpIds = new Set(followUps.map((followUp) => followUp.id));
+        for (const interaction of await db.interactions.toArray())
+          if (
+            interaction.profileId === id ||
+            personIds.has(interaction.personId) ||
+            (interaction.followUpId && followUpIds.has(interaction.followUpId))
+          )
+            await db.interactions.delete(interaction.id);
+        for (const notification of await db.notificationOccurrences.toArray())
+          if (followUpIds.has(notification.ownerId))
+            await db.notificationOccurrences.delete(
+              notification.idempotencyKey,
+            );
+        for (const rule of await db.reminderRules.toArray())
+          if (rule.followUpId && followUpIds.has(rule.followUpId))
+            await db.reminderRules.delete(rule.id);
+        for (const followUp of followUps)
+          await db.followUps.delete(followUp.id);
+        for (const person of people) await db.people.delete(person.id);
         await db.profiles.delete(id);
         if (!fallback) {
           fallback = {
