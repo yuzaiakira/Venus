@@ -3,6 +3,7 @@ import { DashboardScreen } from "../src/app/dashboard";
 import { browserBookmarks } from "../src/infrastructure/browser-bookmarks";
 import {
   calendar,
+  focus,
   goals,
   plugins,
   people,
@@ -24,6 +25,7 @@ createRoot(root).render(
     goals={goals}
     reviews={reviews}
     people={people}
+    focus={focus}
     plugins={plugins}
     online={navigator.onLine}
   />,

@@ -29,6 +29,7 @@ export const widgetTypes = [
   "goals",
   "reviews",
   "people",
+  "focus",
 ] as const;
 export const sharedKinds = ["note", "task", "event", "bookmark"] as const;
 export const allowedMime = ["image/png", "image/jpeg", "image/webp"] as const;
@@ -66,6 +67,7 @@ export const ModuleFlagsSchema = z
     goals: z.boolean(),
     reviews: z.boolean(),
     people: z.boolean(),
+    focus: z.boolean(),
   })
   .strict();
 export const BootstrapSchema = z
@@ -167,6 +169,8 @@ export const defaultModules: Bootstrap["modules"] = {
   reviews: true,
   // People & Follow-ups is opt-in and is never inserted into a saved layout.
   people: true,
+  // Focus Coach stays opt-in and never changes an existing saved layout.
+  focus: true,
 };
 
 export function defaultBootstrap(timeZone = "UTC"): Bootstrap {

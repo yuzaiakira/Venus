@@ -22,6 +22,7 @@ import type { EventRecord, TimerRecord } from "../domain/time/records";
 import type { GoalDetails } from "../application/goals";
 import type { ReviewEntry } from "../application/reviews";
 import type { PeopleWorkspace } from "../application/people";
+import type { FocusWorkspace } from "../domain/focus";
 import { translate, type MessageKey } from "../locales/messages";
 import { Icon, type IconName } from "./icons";
 
@@ -112,6 +113,12 @@ const chrome: Record<
     title: "widget.peopleTitle",
     sub: "widget.peopleSub",
   },
+  focus: {
+    icon: "clock",
+    tone: "purple",
+    title: "widget.focusCoachTitle",
+    sub: "widget.focusCoachSub",
+  },
 };
 
 export function WidgetChrome(props: {
@@ -166,6 +173,7 @@ export function WidgetBody(props: {
   goals: GoalDetails[];
   reviews: ReviewEntry[];
   people: PeopleWorkspace | null;
+  focus: FocusWorkspace | null;
   bookmarks: LocalBookmarkRecord[];
   events: EventRecord[];
   timer: TimerRecord | null;
@@ -185,6 +193,7 @@ export function WidgetBody(props: {
   onPauseTimer?: (() => void) | undefined;
   onResumeTimer?: (() => void) | undefined;
   onResetTimer?: (() => void) | undefined;
+  onStartFocus?: ((title: string) => void) | undefined;
 }) {
   // Production builds leave this unset, and the branch is dropped from the package.
   if (
@@ -393,6 +402,43 @@ export function WidgetBody(props: {
           </p>
         ) : (
           <p className="muted">{t("people.noFollowUps")}</p>
+        )}
+      </div>
+    );
+  }
+  if (props.widget.widgetType === "focus") {
+    const next = props.focus?.suggestions[0] ?? null;
+    const active = props.focus?.activeTimer ?? null;
+    return (
+      <div>
+        {active ? (
+          <p className="briefing-lead">{t("focus.timerActive")}</p>
+        ) : next ? (
+          <>
+            <p className="briefing-lead">
+              <bdi>{next.task.title}</bdi>
+            </p>
+            <p className="muted">
+              {t(`focus.reason.${next.reason}` as MessageKey)}
+            </p>
+            {next.slot ? (
+              <p className="muted">
+                {t("focus.nextWindow")}:{" "}
+                {formatFocusTime(next.slot.startAtUTC, props.bootstrap)}
+              </p>
+            ) : (
+              <p className="muted">{t("focus.noWindow")}</p>
+            )}
+            <button
+              className="btn primary"
+              type="button"
+              onClick={() => props.onStartFocus?.(next.task.title)}
+            >
+              <Icon name="play" /> <span>{t("focus.start")}</span>
+            </button>
+          </>
+        ) : (
+          <p className="muted">{t("focus.empty")}</p>
         )}
       </div>
     );
@@ -694,6 +740,13 @@ export function WidgetBody(props: {
       </ul>
     </div>
   );
+}
+
+function formatFocusTime(value: number, bootstrap: Bootstrap) {
+  return new Intl.DateTimeFormat(
+    bootstrap.locale === "fa" ? "fa-u-nu-arabext" : "en",
+    { timeZone: bootstrap.timeZone, hour: "numeric", minute: "2-digit" },
+  ).format(new Date(value));
 }
 
 interface BoundaryProps {

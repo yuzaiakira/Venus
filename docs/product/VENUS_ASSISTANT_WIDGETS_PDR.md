@@ -48,7 +48,7 @@ equivalent transactional service operation.
 | Habit Tracker       | Maintain routines                   | Daily/weekly habits, check-in, streak, schedule, missed state, history and reminder integration    | Local habit/check-in records                                      | 🟡 Implementation verified; browser acceptance pending |
 | Goals & Progress    | Connect work to outcomes            | Goals, time frame, measurable progress, linked tasks/habits, milestones, weekly review             | Local goal, milestone and relation records                        | 🟡 Implementation verified; browser acceptance pending |
 | Weather & Commute   | Prepare for the next commitment     | Location consent, forecast, event travel buffer, refresh time, graceful unavailable state          | Location/network are opt-in; cache minimally                      | ⬜ Planned                                             |
-| Focus Coach         | Protect usable focus time           | Free-time suggestions, start timer, defer/snooze, explain conflicts, never auto-edit calendar      | Reads local tasks/events/timer; recommendations local first       | ⬜ Planned                                             |
+| Focus Coach         | Protect usable focus time           | Free-time suggestions, start timer, defer/snooze, explain conflicts, never auto-edit calendar      | Reads local tasks/events/timer; recommendations local first       | 🟡 Implementation verified; browser acceptance pending |
 | People & Follow-ups | Remember relationships and promises | People, next follow-up, notes, contact method, snooze/done, due reminders                          | Local people/follow-up records; no address-book access by default | 🟡 Implementation verified; browser acceptance pending |
 | Finance Snapshot    | See commitments and budget          | Manual accounts/categories, monthly budget, upcoming bills, totals, period selector, export/delete | Local financial records; no banking connection by default         | ⬜ Planned                                             |
 | Knowledge Review    | Revisit useful information          | Spaced review queue, surface notes, rate recall, postpone, links to notes                          | Local note-review schedule only                                   | 🟡 Implementation verified; browser acceptance pending |
@@ -64,9 +64,10 @@ equivalent transactional service operation.
 5. **Goals & Progress** — goals/milestones and task/habit links. 🟡 Implementation verified; browser acceptance pending.
 6. **Knowledge Review** — review scheduling for existing notes. 🟡 Implementation verified; browser acceptance pending.
 7. **People & Follow-ups** — local CRM-style follow-up flow. 🟡 Implementation verified; browser acceptance pending.
-8. **Focus Coach** — explainable schedule-aware suggestions. ⬜ **Next milestone**
+8. **Focus Coach** — explainable schedule-aware suggestions. 🟡 Implementation
+   verified; browser acceptance pending.
 9. **AI Inbox** — local triage queue; remote provider only after an explicit
-   product decision and consent design. ⬜
+   product decision and consent design. ⬜ **Next milestone**
 10. **Weather & Commute** — only after a documented provider, location and
     network-consent design. ⬜
 11. **Finance Snapshot** — manual-first ledger, budget and export/delete
@@ -115,8 +116,8 @@ gate while this cloud environment cannot launch a supported browser.
   not yet exercised Goals & Progress. This is separate from the existing Habit
   Tracker browser evidence and is not inferred from builds or automated data
   tests.
-- **Release readiness:** browser acceptance remains open; the next independent
-  PDR delivery milestone is **Focus Coach**.
+- **Release readiness:** browser acceptance remains open. Focus Coach is
+  separately implementation-verified and needs its own browser exercise.
 
 ## Knowledge Review verification status — 2026-10-21
 
@@ -178,8 +179,34 @@ gate while this cloud environment cannot launch a supported browser.
   Knowledge Review.
 - **Release readiness:** implementation is verified; browser acceptance remains
   open until the extension is exercised in official Firefox and secure sandboxed
-  Chromium, including responsive RTL People interactions. The next independent
-  PDR delivery milestone is **Focus Coach**.
+  Chromium, including responsive RTL People interactions.
+
+## Focus Coach verification status — 2026-10-21
+
+- **Implementation and automated tests:** verified. Dexie v12 additively adds
+  only profile-owned Focus Coach defer/snooze choices. The v11 → v12 migration
+  test retains existing profiles, tasks and People records before persisting a
+  Focus Coach choice through database close/reopen. Recommendation ordering,
+  local calendar-day deferral, DST/year boundaries, stale concurrent choices,
+  profile isolation and persisted state are covered by unit and integration
+  tests.
+- **PDR widget acceptance:** implemented. Focus Coach is an opt-in singleton
+  in **Customize → Add widget**, preserves existing layouts and retains its
+  local choices when removed. The full module proposes open work using the
+  existing task, event and timer records, explains its due/focus rationale and
+  shows the considered calendar conflicts and clear 25-minute windows. It can
+  snooze or defer a recommendation and starts only the existing Pomodoro timer.
+  The current event model has no end time, so timed events conservatively block
+  one hour and all-day events block their local day; the UI states this rule.
+  It never writes to or reschedules a calendar event.
+- **Real-browser acceptance:** pending. Existing browser suites do not cover
+  Focus Coach. A local supported Firefox or securely sandboxed Chromium is not
+  available in this cloud environment, so build and automated-data checks are
+  not treated as browser acceptance.
+- **Release readiness:** implementation is verified; browser acceptance remains
+  open until the extension is exercised in official Firefox and secure
+  sandboxed Chromium, including responsive RTL focus interactions. The next
+  independent PDR delivery milestone is **AI Inbox**.
 
 ## Non-goals for this delivery
 

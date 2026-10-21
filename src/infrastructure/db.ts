@@ -3,6 +3,7 @@ import type { CalendarDatabase } from "../application/calendar";
 import type { GoalsDatabase } from "../application/goals";
 import type { ReviewsDatabase } from "../application/reviews";
 import type { PeopleDatabase } from "../application/people";
+import type { FocusDatabase } from "../application/focus";
 import type { ProductivityDatabase } from "../application/productivity";
 import type {
   AssetRecord,
@@ -35,6 +36,7 @@ import type {
   InteractionRecord,
   PersonRecord,
 } from "../domain/people";
+import type { FocusDeferralRecord } from "../domain/focus";
 import type {
   PluginInstanceRecord,
   PluginPackageRecord,
@@ -66,6 +68,7 @@ export const db = new Dexie("Venus-p00") as Dexie & {
   people: EntityTable<PersonRecord, "id">;
   followUps: EntityTable<FollowUpRecord, "id">;
   interactions: EntityTable<InteractionRecord, "id">;
+  focusDeferrals: EntityTable<FocusDeferralRecord, "id">;
   localBookmarks: EntityTable<LocalBookmarkRecord, "id">;
   bookmarkSnapshots: EntityTable<BookmarkSnapshotRecord, "id">;
   events: EntityTable<EventRecord, "id">;
@@ -193,6 +196,12 @@ db.version(11).stores({
   interactions: "id, profileId, personId, followUpId, occurredAt",
   reminderRules: "id, eventId, taskId, habitId, followUpId",
 });
+// v12 retains all planning records. It adds only per-profile, local choices
+// to defer or snooze Focus Coach recommendations.
+db.version(12).stores({
+  focusDeferrals:
+    "id, profileId, taskId, [profileId+taskId], deferredUntilDate, snoozedUntilUTC, updatedAt",
+});
 export const productivityDb: ProductivityDatabase = {
   notes: db.notes,
   noteDrafts: db.noteDrafts,
@@ -248,6 +257,19 @@ export const peopleDb: PeopleDatabase = {
     db.transaction(
       "rw",
       [db.profiles, db.people, db.followUps, db.interactions],
+      work,
+    ),
+};
+export const focusDb: FocusDatabase = {
+  profiles: db.profiles,
+  tasks: db.tasks,
+  events: db.events,
+  timerSessions: db.timerSessions,
+  focusDeferrals: db.focusDeferrals,
+  transaction: (_mode, _tables, work) =>
+    db.transaction(
+      "rw",
+      [db.profiles, db.tasks, db.events, db.timerSessions, db.focusDeferrals],
       work,
     ),
 };

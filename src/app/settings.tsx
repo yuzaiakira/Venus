@@ -90,6 +90,7 @@ export function SettingsScreen(props: {
         goals: "widget.goalsTitle",
         reviews: "widget.reviewsTitle",
         people: "widget.peopleTitle",
+        focus: "widget.focusCoachTitle",
       }[type] as MessageKey,
     );
   if (!snapshot) {
@@ -681,6 +682,7 @@ export function SettingsScreen(props: {
                       goals: true,
                       reviews: true,
                       people: true,
+                      focus: true,
                     },
                   });
                 if (confirming === "profile" && profile)

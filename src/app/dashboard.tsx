@@ -34,6 +34,8 @@ import type { createCalendar } from "../application/calendar";
 import type { Goals, GoalsWorkspace } from "../application/goals";
 import type { Reviews, ReviewsWorkspace } from "../application/reviews";
 import type { People, PeopleWorkspace } from "../application/people";
+import type { Focus } from "../application/focus";
+import type { FocusWorkspace } from "../domain/focus";
 import type { PluginPlatform } from "../application/plugins";
 import type {
   EventRecord,
@@ -50,6 +52,7 @@ import { HabitsScreen } from "./habits";
 import { GoalsScreen } from "./goals";
 import { ReviewsScreen } from "./reviews";
 import { PeopleScreen } from "./people";
+import { FocusScreen } from "./focus";
 import { PluginStudio, PluginWidget } from "./plugin-studio";
 import { SettingsScreen } from "./settings";
 import { Icon } from "./icons";
@@ -69,6 +72,7 @@ export function DashboardScreen(props: {
   goals: Goals;
   reviews: Reviews;
   people: People;
+  focus: Focus;
   plugins: PluginPlatform;
   online: boolean;
 }) {
@@ -109,6 +113,7 @@ export function DashboardScreen(props: {
   const [goalsData, setGoalsData] = useState<GoalsWorkspace | null>(null);
   const [reviewsData, setReviewsData] = useState<ReviewsWorkspace | null>(null);
   const [peopleData, setPeopleData] = useState<PeopleWorkspace | null>(null);
+  const [focusData, setFocusData] = useState<FocusWorkspace | null>(null);
   const [view, setView] = useState<
     | "home"
     | "notes"
@@ -121,6 +126,7 @@ export function DashboardScreen(props: {
     | "goals"
     | "reviews"
     | "people"
+    | "focus"
   >("home");
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [reminders, setReminders] = useState<NotificationRecord[]>([]);
@@ -167,17 +173,23 @@ export function DashboardScreen(props: {
       const today = new Intl.DateTimeFormat("en-CA", {
         timeZone: next.bootstrap.timeZone,
       }).format(new Date());
-      const [goalContent, reviewContent, peopleContent] = await Promise.all([
-        props.goals.load(next.bootstrap.selectedProfileId),
-        props.reviews.load(next.bootstrap.selectedProfileId, today),
-        props.people.load(next.bootstrap.selectedProfileId, today),
-      ]);
+      const [goalContent, reviewContent, peopleContent, focusContent] =
+        await Promise.all([
+          props.goals.load(next.bootstrap.selectedProfileId),
+          props.reviews.load(next.bootstrap.selectedProfileId, today),
+          props.people.load(next.bootstrap.selectedProfileId, today),
+          props.focus.load(
+            next.bootstrap.selectedProfileId,
+            next.bootstrap.timeZone,
+          ),
+        ]);
       if (sequence !== loadSequence.current) return;
       setSnapshot(next);
       setLibrary(content);
       setGoalsData(goalContent);
       setReviewsData(reviewContent);
       setPeopleData(peopleContent);
+      setFocusData(focusContent);
       setEvents(schedule.events);
       setReminders(schedule.notifications);
       setQuiet(schedule.quietHours);
@@ -200,6 +212,7 @@ export function DashboardScreen(props: {
     props.goals,
     props.reviews,
     props.people,
+    props.focus,
   ]);
   async function completeOnboarding() {
     const bootstrap = await props.workspace.updatePreferences({
@@ -468,6 +481,11 @@ export function DashboardScreen(props: {
       id: "people" as const,
       icon: "note" as const,
       label: t("nav.people"),
+    },
+    {
+      id: "focus" as const,
+      icon: "clock" as const,
+      label: t("nav.focus"),
     },
     {
       id: "calendar" as const,
@@ -918,6 +936,22 @@ export function DashboardScreen(props: {
                 focusFollowUpId={focusedFollowUpId}
               />
             ) : null}
+            {view === "focus" && focusData ? (
+              <FocusScreen
+                profileId={profile.id}
+                data={focusData}
+                focus={props.focus}
+                calendar={props.calendar}
+                locale={snapshot.bootstrap.locale}
+                timeZone={snapshot.bootstrap.timeZone}
+                online={online}
+                onChanged={reload}
+                onOpenTask={(id) => {
+                  setSelectedTaskId(id);
+                  setView("tasks");
+                }}
+              />
+            ) : null}
             {view === "home" ? (
               <>
                 <section className="hero card-glass" aria-label={t("nav.home")}>
@@ -1019,7 +1053,8 @@ export function DashboardScreen(props: {
             view !== "habits" &&
             view !== "goals" &&
             view !== "reviews" &&
-            view !== "people" ? (
+            view !== "people" &&
+            view !== "focus" ? (
               <LibraryScreen
                 view={view}
                 selectedNoteId={selectedNoteId}
@@ -1071,7 +1106,9 @@ export function DashboardScreen(props: {
                                     ? () => setView("reviews")
                                     : widget.widgetType === "people"
                                       ? () => setView("people")
-                                      : undefined;
+                                      : widget.widgetType === "focus"
+                                        ? () => setView("focus")
+                                        : undefined;
                     return (
                       <article
                         key={widget.id}
@@ -1160,6 +1197,7 @@ export function DashboardScreen(props: {
                                 goals={goalsData?.goals ?? []}
                                 reviews={reviewsData?.schedules ?? []}
                                 people={peopleData}
+                                focus={focusData}
                                 bookmarks={library?.bookmarks ?? []}
                                 events={events}
                                 timer={activeTimer}
@@ -1267,6 +1305,16 @@ export function DashboardScreen(props: {
                                       setNotice(t("settings.error")),
                                     );
                                 }}
+                                onStartFocus={(title) =>
+                                  void props.calendar
+                                    .startTimer({
+                                      mode: "pomodoro",
+                                      label: title,
+                                      durationMs: 25 * 60_000,
+                                    })
+                                    .then(() => reload())
+                                    .catch(() => setNotice(t("settings.error")))
+                                }
                               />
                             </WidgetChrome>
                           )}
@@ -1615,6 +1663,7 @@ function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
     goals: "widget.goalsTitle",
     reviews: "widget.reviewsTitle",
     people: "widget.peopleTitle",
+    focus: "widget.focusCoachTitle",
   };
   return t(labels[type]);
 }

@@ -21,7 +21,7 @@ describe("Dexie version 3 migration", () => {
   it("opens version 3 without deleting version 1 probes", async () => {
     const { db } = await import("../../src/infrastructure/db");
     await db.open();
-    expect(db.verno).toBe(11);
+    expect(db.verno).toBe(12);
     expect(await db.probes.get(probe.id)).toMatchObject({
       state: "pending",
       dueAt: 5,
@@ -30,6 +30,7 @@ describe("Dexie version 3 migration", () => {
       "assets",
       "bookmarkSnapshots",
       "events",
+      "focusDeferrals",
       "folders",
       "followUps",
       "goalRelations",
@@ -160,7 +161,7 @@ describe("Dexie version 3 migration", () => {
     });
     version4.close();
     await db.open();
-    expect(db.verno).toBe(11);
+    expect(db.verno).toBe(12);
     expect(await db.probes.get(probe.id)).toMatchObject({ state: "pending" });
     expect(
       await db.notes.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
@@ -291,7 +292,7 @@ it("preserves a realistic version 6 workspace and persists habit check-ins after
   });
   legacy.close();
   await db.open();
-  expect(db.verno).toBe(11);
+  expect(db.verno).toBe(12);
   expect(db.tables.some((table) => table.name === "habits")).toBe(true);
   expect((await db.profiles.get(profileId))?.id).toBe(profileId);
   expect((await db.widgets.toArray())[0]?.profileId).toBe(profileId);
@@ -339,6 +340,7 @@ it("adds the habit reminder index from v7 while preserving event and task remind
             "people",
             "followUps",
             "interactions",
+            "focusDeferrals",
           ].includes(String(name)) === false,
       ),
   );
@@ -381,7 +383,7 @@ it("adds the habit reminder index from v7 while preserving event and task remind
   await legacy.table("notificationOccurrences").put(oldNotification);
   legacy.close();
   await db.open();
-  expect(db.verno).toBe(11);
+  expect(db.verno).toBe(12);
   expect(await db.reminderRules.get(eventRule)).toMatchObject({
     eventId: "33333333-3333-4333-8333-333333333333",
     taskId: null,
@@ -397,7 +399,7 @@ it("adds the habit reminder index from v7 while preserving event and task remind
   db.close();
 });
 
-it("additively upgrades a realistic v8 workspace through v11 and persists Goals records", async () => {
+it("additively upgrades a realistic v8 workspace through v12 and persists Goals records", async () => {
   const { createGoals } = await import("../../src/application/goals");
   const { db, goalsDb } = await import("../../src/infrastructure/db");
   if (db.isOpen()) db.close();
@@ -416,6 +418,7 @@ it("additively upgrades a realistic v8 workspace through v11 and persists Goals 
             "people",
             "followUps",
             "interactions",
+            "focusDeferrals",
           ].includes(table.name),
       )
       .map((table) => {
@@ -488,7 +491,7 @@ it("additively upgrades a realistic v8 workspace through v11 and persists Goals 
   legacy.close();
 
   await db.open();
-  expect(db.verno).toBe(11);
+  expect(db.verno).toBe(12);
   expect(db.tables.some((table) => table.name === "goals")).toBe(true);
   expect(db.goals.schema.idxByName.profileId).toBeDefined();
   expect(
@@ -521,7 +524,7 @@ it("additively upgrades a realistic v8 workspace through v11 and persists Goals 
   db.close();
 });
 
-it("additively upgrades a realistic v9 workspace through v11 and preserves records while persisting review history", async () => {
+it("additively upgrades a realistic v9 workspace through v12 and preserves records while persisting review history", async () => {
   const { createReviews } = await import("../../src/application/reviews");
   const { db, reviewsDb } = await import("../../src/infrastructure/db");
   if (db.isOpen()) db.close();
@@ -536,6 +539,7 @@ it("additively upgrades a realistic v9 workspace through v11 and preserves recor
             "people",
             "followUps",
             "interactions",
+            "focusDeferrals",
           ].includes(table.name),
       )
       .map((table) => {
@@ -603,7 +607,7 @@ it("additively upgrades a realistic v9 workspace through v11 and preserves recor
   legacy.close();
 
   await db.open();
-  expect(db.verno).toBe(11);
+  expect(db.verno).toBe(12);
   expect(
     db.reviewSchedules.schema.idxByName["[profileId+noteId]"],
   ).toBeDefined();
@@ -635,7 +639,7 @@ it("additively upgrades a realistic v9 workspace through v11 and preserves recor
   db.close();
 });
 
-it("additively upgrades a realistic v10 workspace to v11 and preserves every existing record while persisting People data", async () => {
+it("additively upgrades a realistic v10 workspace through v12 and preserves every existing record while persisting People data", async () => {
   const { createPeople } = await import("../../src/application/people");
   const { db, peopleDb } = await import("../../src/infrastructure/db");
   if (db.isOpen()) db.close();
@@ -644,7 +648,9 @@ it("additively upgrades a realistic v10 workspace to v11 and preserves every exi
     db.tables
       .filter(
         (table) =>
-          !["people", "followUps", "interactions"].includes(table.name),
+          !["people", "followUps", "interactions", "focusDeferrals"].includes(
+            table.name,
+          ),
       )
       .map((table) => [
         table.name,
@@ -734,7 +740,7 @@ it("additively upgrades a realistic v10 workspace to v11 and preserves every exi
   legacy.close();
 
   await db.open();
-  expect(db.verno).toBe(11);
+  expect(db.verno).toBe(12);
   expect(db.people.schema.idxByName.profileId).toBeDefined();
   expect(db.followUps.schema.idxByName["[profileId+personId]"]).toBeDefined();
   expect(db.reminderRules.schema.idxByName.followUpId).toBeDefined();
@@ -786,5 +792,117 @@ it("additively upgrades a realistic v10 workspace to v11 and preserves every exi
       (row) => row.personId === person.id,
     ),
   ).toHaveLength(1);
+  db.close();
+});
+
+it("additively upgrades a realistic v11 workspace to v12 without changing records and persists Focus Coach choices", async () => {
+  const { createFocus } = await import("../../src/application/focus");
+  const { db, focusDb } = await import("../../src/infrastructure/db");
+  if (db.isOpen()) db.close();
+  await Dexie.delete("Venus-p00");
+  const v11Stores = Object.fromEntries(
+    db.tables
+      .filter((table) => table.name !== "focusDeferrals")
+      .map((table) => [
+        table.name,
+        [
+          table.schema.primKey.src,
+          ...table.schema.indexes.map((index) => index.src),
+        ]
+          .filter(Boolean)
+          .join(", "),
+      ]),
+  );
+  const legacy = new Dexie("Venus-p00");
+  legacy.version(11).stores(v11Stores);
+  const profileId = "18181818-1818-4181-8181-181818181818";
+  const taskId = "19191919-1919-4191-8191-191919191919";
+  const personId = "20202020-2020-4202-8202-202020202020";
+  await legacy.table("profiles").put({
+    id: profileId,
+    title: "Kept v11 profile",
+    preset: "minimal",
+    themeMode: null,
+    wallpaper: null,
+    blurPx: null,
+    glassAlpha: null,
+    accent: null,
+    revision: 5,
+    createdAt: "2026-10-21T00:00:00.000Z",
+    updatedAt: "2026-10-21T00:00:00.000Z",
+  });
+  await legacy.table("tasks").put({
+    id: taskId,
+    title: "Keep focused work",
+    details: "Keep every existing task field.",
+    status: "open",
+    column: "todo",
+    sortIndex: 0,
+    today: true,
+    todayOrder: 0,
+    labels: [],
+    checklist: [],
+    priority: 3,
+    dueDate: "2026-10-22",
+    eventId: null,
+    focusRank: 1,
+    completedAt: null,
+    revision: 4,
+    createdAt: "2026-10-21T00:00:00.000Z",
+    updatedAt: "2026-10-21T00:00:00.000Z",
+  });
+  await legacy.table("people").put({
+    id: personId,
+    profileId,
+    displayName: "Kept person",
+    organization: null,
+    role: null,
+    email: null,
+    phone: null,
+    tags: [],
+    relationshipNotes: "",
+    status: "active",
+    revision: 2,
+    createdAt: "2026-10-21T00:00:00.000Z",
+    updatedAt: "2026-10-21T00:00:00.000Z",
+  });
+  legacy.close();
+
+  await db.open();
+  expect(db.verno).toBe(12);
+  expect(
+    db.focusDeferrals.schema.idxByName["[profileId+taskId]"],
+  ).toBeDefined();
+  expect(await db.tasks.get(taskId)).toMatchObject({
+    id: taskId,
+    revision: 4,
+    title: "Keep focused work",
+  });
+  expect(await db.people.get(personId)).toMatchObject({
+    id: personId,
+    profileId,
+    displayName: "Kept person",
+  });
+  const focus = createFocus(focusDb);
+  const plan = await focus.load(
+    profileId,
+    "America/New_York",
+    Date.UTC(2026, 9, 21, 13),
+  );
+  expect(plan.suggestions[0]?.task.id).toBe(taskId);
+  const state = await focus.snooze(
+    profileId,
+    taskId,
+    null,
+    60,
+    Date.UTC(2026, 9, 21, 13),
+  );
+  db.close();
+  await db.open();
+  expect(await db.focusDeferrals.get(state.id)).toMatchObject({
+    profileId,
+    taskId,
+    snoozedUntilUTC: Date.UTC(2026, 9, 21, 14),
+  });
   db.close();
 });

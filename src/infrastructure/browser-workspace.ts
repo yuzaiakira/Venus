@@ -3,11 +3,13 @@ import { browser } from "wxt/browser";
 import { createCalendar } from "../application/calendar";
 import { createGoals } from "../application/goals";
 import { createPeople } from "../application/people";
+import { createFocus } from "../application/focus";
 import { createReviews } from "../application/reviews";
 import { createProductivity } from "../application/productivity";
 import {
   calendarDb,
   db,
+  focusDb,
   goalsDb,
   peopleDb,
   productivityDb,
@@ -59,6 +61,7 @@ export const workspace = createWorkspace(
           db.people.toArray(),
           db.followUps.toArray(),
           db.interactions.toArray(),
+          db.focusDeferrals.toArray(),
           db.timerSessions.toArray(),
           db.notificationOccurrences.toArray(),
           db.quietHours.toArray(),
@@ -113,6 +116,7 @@ export const calendar = (calendarApi = createCalendar({
 export const people = createPeople(peopleDb, publish, {
   syncFollowUp: (id) => calendar.syncFollowUp(id),
 });
+export const focus = createFocus(focusDb, publish);
 
 export async function requestOptional(
   name: "bookmarks" | "notifications",
