@@ -2,8 +2,9 @@ import { liveQuery } from "dexie";
 import { browser } from "wxt/browser";
 import { createCalendar } from "../application/calendar";
 import { createGoals } from "../application/goals";
+import { createReviews } from "../application/reviews";
 import { createProductivity } from "../application/productivity";
-import { calendarDb, db, goalsDb, productivityDb } from "./db";
+import { calendarDb, db, goalsDb, productivityDb, reviewsDb } from "./db";
 import { productNotifications, sweepAlarmPort } from "./browser";
 import {
   createWorkspace,
@@ -45,6 +46,8 @@ export const workspace = createWorkspace(
           db.milestones.toArray(),
           db.goalRelations.toArray(),
           db.weeklyReviews.toArray(),
+          db.reviewSchedules.toArray(),
+          db.reviewHistory.toArray(),
           db.timerSessions.toArray(),
           db.notificationOccurrences.toArray(),
           db.quietHours.toArray(),
@@ -68,6 +71,7 @@ export const productivity = createProductivity(
   (id, expected, patch) => calendarApi.updateHabit(id, expected, patch),
 );
 export const goals = createGoals(goalsDb, publish);
+export const reviews = createReviews(reviewsDb, publish);
 export const plugins = createPluginPlatform(
   db,
   {

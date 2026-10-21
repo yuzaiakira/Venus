@@ -228,7 +228,7 @@ try {
   const now = new Date();
   const reminderTime = `${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
   await editedRow.getByRole("checkbox", { name: "Enable reminder" }).check();
-  await editedRow.getByLabel("Time").fill(reminderTime);
+  await editedRow.getByLabel("Time", { exact: true }).fill(reminderTime);
   await editedRow.getByLabel("Timezone").fill("UTC");
   await editedRow
     .getByRole("button", { name: "Save reminder", exact: true })
@@ -265,7 +265,10 @@ try {
     true,
     "Reminder enabled state did not persist after reload",
   );
-  assert.equal(await reloadedRow.getByLabel("Time").inputValue(), reminderTime);
+  assert.equal(
+    await reloadedRow.getByLabel("Time", { exact: true }).inputValue(),
+    reminderTime,
+  );
   assert.equal(await reloadedRow.getByLabel("Timezone").inputValue(), "UTC");
   evidence.checks.push("reminder-settings-reload");
 
@@ -386,7 +389,7 @@ try {
   const weeklyRow = page.locator("li", { hasText: weeklyTitle });
   await weeklyRow.getByText(weeklyTitle, { exact: true }).waitFor();
   await weeklyRow.getByRole("checkbox", { name: "Enable reminder" }).check();
-  await weeklyRow.getByLabel("Time").fill(reminderTime);
+  await weeklyRow.getByLabel("Time", { exact: true }).fill(reminderTime);
   await weeklyRow.getByLabel("Timezone").fill("UTC");
   await weeklyRow
     .locator('[aria-label="Reminder weekdays"]')

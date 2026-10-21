@@ -40,6 +40,7 @@ export function LibraryScreen(props: {
   selectedTaskId?: string | null;
   onSelectedNote?: (id: string) => void;
   onSelectedTask?: (id: string | null) => void;
+  onEnrollReview?: (noteId: string) => Promise<void>;
 }) {
   if (props.view === "notes")
     return (
@@ -49,6 +50,7 @@ export function LibraryScreen(props: {
         locale={props.locale}
         selectedId={props.selectedNoteId ?? null}
         onSelected={props.onSelectedNote}
+        onEnrollReview={props.onEnrollReview}
       />
     );
   if (props.view === "tasks")
@@ -77,6 +79,7 @@ function NotesScreen(props: {
   locale: "en" | "fa";
   selectedId: string | null;
   onSelected?: ((id: string) => void) | undefined;
+  onEnrollReview?: ((noteId: string) => Promise<void>) | undefined;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
   const [selected, setSelected] = useState<string | null>(props.selectedId);
@@ -262,6 +265,7 @@ function NotesScreen(props: {
           locale={props.locale}
           productivity={props.productivity}
           folders={folders}
+          onEnrollReview={props.onEnrollReview}
         />
       ) : (
         <p>{t("notes.empty")}</p>
@@ -282,6 +286,7 @@ function NoteEditor(props: {
   folders: Library["folders"];
   locale: "en" | "fa";
   productivity: Productivity;
+  onEnrollReview?: ((noteId: string) => Promise<void>) | undefined;
 }) {
   const t = (key: MessageKey) => translate(props.locale, key);
   const [title, setTitle] = useState(props.note.title);
@@ -291,6 +296,7 @@ function NoteEditor(props: {
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState("saved");
   const [storedText, setStoredText] = useState("");
+  const [reviewStatus, setReviewStatus] = useState("");
   const draftId = useRef(crypto.randomUUID());
   const [recoverable, setRecoverable] = useState<NoteDraft[]>([]);
   const draftQueue = useRef(Promise.resolve());
@@ -526,6 +532,23 @@ function NoteEditor(props: {
               ? t("notes.conflict")
               : t("notes.error")}
       </p>
+      {props.onEnrollReview ? (
+        <div className="cluster">
+          <button
+            className="btn"
+            type="button"
+            onClick={() =>
+              void props
+                .onEnrollReview?.(props.note.id)
+                .then(() => setReviewStatus(t("reviews.added")))
+                .catch(() => setReviewStatus(t("reviews.saveFailed")))
+            }
+          >
+            {t("notes.addToReview")}
+          </button>
+          {reviewStatus ? <span role="status">{reviewStatus}</span> : null}
+        </div>
+      ) : null}
       {status === "conflict" ? (
         <div>
           <p>

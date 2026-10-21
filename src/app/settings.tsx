@@ -88,6 +88,7 @@ export function SettingsScreen(props: {
         capture: "widget.captureTitle",
         habits: "widget.habitsTitle",
         goals: "widget.goalsTitle",
+        reviews: "widget.reviewsTitle",
       }[type] as MessageKey,
     );
   if (!snapshot) {
@@ -677,6 +678,7 @@ export function SettingsScreen(props: {
                       capture: true,
                       habits: true,
                       goals: true,
+                      reviews: true,
                     },
                   });
                 if (confirming === "profile" && profile)

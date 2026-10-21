@@ -40,18 +40,18 @@ equivalent transactional service operation.
 
 ## Widgets and acceptance requirements
 
-| Widget              | User need                           | Required capabilities                                                                              | Data and privacy                                                  | Status         |
-| ------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | -------------- |
-| Daily Briefing      | Know what matters now               | Top Today tasks, next calendar event and focus action; direct task opening                         | Reads existing local tasks, events and timer only                 | ✅ Implemented |
-| Quick Capture       | Save an idea in seconds             | Capture task, note or event; title-first entry; Today toggle; clear success/failure state          | Uses existing local capture services                              | ✅ Implemented |
-| AI Inbox            | Triage incoming material            | Review queue, classify to task/note/event, confidence/explanation, edit before save, reject/undo   | Local rules first; no remote AI without explicit opt-in           | ⬜ Planned     |
+| Widget              | User need                           | Required capabilities                                                                              | Data and privacy                                                  | Status                                                 |
+| ------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
+| Daily Briefing      | Know what matters now               | Top Today tasks, next calendar event and focus action; direct task opening                         | Reads existing local tasks, events and timer only                 | ✅ Implemented                                         |
+| Quick Capture       | Save an idea in seconds             | Capture task, note or event; title-first entry; Today toggle; clear success/failure state          | Uses existing local capture services                              | ✅ Implemented                                         |
+| AI Inbox            | Triage incoming material            | Review queue, classify to task/note/event, confidence/explanation, edit before save, reject/undo   | Local rules first; no remote AI without explicit opt-in           | ⬜ Planned                                             |
 | Habit Tracker       | Maintain routines                   | Daily/weekly habits, check-in, streak, schedule, missed state, history and reminder integration    | Local habit/check-in records                                      | 🟡 Implementation verified; browser acceptance pending |
 | Goals & Progress    | Connect work to outcomes            | Goals, time frame, measurable progress, linked tasks/habits, milestones, weekly review             | Local goal, milestone and relation records                        | 🟡 Implementation verified; browser acceptance pending |
-| Weather & Commute   | Prepare for the next commitment     | Location consent, forecast, event travel buffer, refresh time, graceful unavailable state          | Location/network are opt-in; cache minimally                      | ⬜ Planned     |
-| Focus Coach         | Protect usable focus time           | Free-time suggestions, start timer, defer/snooze, explain conflicts, never auto-edit calendar      | Reads local tasks/events/timer; recommendations local first       | ⬜ Planned     |
-| People & Follow-ups | Remember relationships and promises | People, next follow-up, notes, contact method, snooze/done, due reminders                          | Local people/follow-up records; no address-book access by default | ⬜ Planned     |
-| Finance Snapshot    | See commitments and budget          | Manual accounts/categories, monthly budget, upcoming bills, totals, period selector, export/delete | Local financial records; no banking connection by default         | ⬜ Planned     |
-| Knowledge Review    | Revisit useful information          | Spaced review queue, surface notes, rate recall, postpone, links to notes                          | Local note-review schedule only                                   | ⬜ Planned     |
+| Weather & Commute   | Prepare for the next commitment     | Location consent, forecast, event travel buffer, refresh time, graceful unavailable state          | Location/network are opt-in; cache minimally                      | ⬜ Planned                                             |
+| Focus Coach         | Protect usable focus time           | Free-time suggestions, start timer, defer/snooze, explain conflicts, never auto-edit calendar      | Reads local tasks/events/timer; recommendations local first       | ⬜ Planned                                             |
+| People & Follow-ups | Remember relationships and promises | People, next follow-up, notes, contact method, snooze/done, due reminders                          | Local people/follow-up records; no address-book access by default | ⬜ Planned                                             |
+| Finance Snapshot    | See commitments and budget          | Manual accounts/categories, monthly budget, upcoming bills, totals, period selector, export/delete | Local financial records; no banking connection by default         | ⬜ Planned                                             |
+| Knowledge Review    | Revisit useful information          | Spaced review queue, surface notes, rate recall, postpone, links to notes                          | Local note-review schedule only                                   | 🟡 Implementation verified; browser acceptance pending |
 
 ## Delivery sequence
 
@@ -62,8 +62,8 @@ equivalent transactional service operation.
 3. **Quick Capture** — a dashboard capture card using existing creation flows. ✅ Implemented
 4. **Habit Tracker** — local schema, history, dashboard card and reminder workflow. 🟡 Implementation verified; browser acceptance pending.
 5. **Goals & Progress** — goals/milestones and task/habit links. 🟡 Implementation verified; browser acceptance pending.
-6. **Knowledge Review** — review scheduling for existing notes. ⬜ **Next milestone**
-7. **People & Follow-ups** — local CRM-style follow-up flow. ⬜
+6. **Knowledge Review** — review scheduling for existing notes. 🟡 Implementation verified; browser acceptance pending.
+7. **People & Follow-ups** — local CRM-style follow-up flow. ⬜ **Next milestone**
 8. **Focus Coach** — explainable schedule-aware suggestions. ⬜
 9. **AI Inbox** — local triage queue; remote provider only after an explicit
    product decision and consent design. ⬜
@@ -116,7 +116,36 @@ gate while this cloud environment cannot launch a supported browser.
   Tracker browser evidence and is not inferred from builds or automated data
   tests.
 - **Release readiness:** browser acceptance remains open; the next independent
-  PDR delivery milestone is **Knowledge Review**.
+  PDR delivery milestone is **People & Follow-ups**.
+
+## Knowledge Review verification status — 2026-10-21
+
+- **Implementation and automated tests:** verified. Dexie v10 adds only
+  profile-owned review schedules and local review-history records. A schedule
+  keeps the original note untouched, starts due on enrollment, and records
+  deterministic calendar-day transitions: Again resets to one day, Hard grows
+  by 1.2×, Good by 2×, and Easy by 3×, all capped at 365 days. Postpone moves a
+  due date one calendar day without recording a successful recall. Unit and
+  integration coverage covers each transition, stale submission rejection,
+  daily queue states, DST/month/year boundaries, pause/resume/remove,
+  unavailable notes, profile isolation, widget singleton/layout persistence,
+  reopen persistence, and v9 → v10 preservation of notes, goals, tasks and
+  habits.
+- **PDR widget acceptance:** implemented. Existing notes can be enrolled from
+  Notes or the full Knowledge Review screen. The dashboard widget is opt-in in
+  **Customize → Add widget**, stays out of saved layouts, summarizes due work,
+  and opens the review flow. Removing it never removes schedules or notes.
+  The module provides a due/overdue queue, original-note link, recall ratings,
+  postponement, upcoming schedules, pause/resume/remove controls, and local
+  history with Persian/English and RTL/LTR presentation.
+- **Real-browser acceptance:** pending. The supported Firefox/Chrome flows
+  have not yet exercised Knowledge Review. Existing Habit Tracker browser
+  checks are not evidence for this module. A local supported browser is not
+  available in this cloud environment.
+- **Release readiness:** implementation is verified; release acceptance remains
+  open until the extension is exercised in official Firefox and secure
+  sandboxed Chromium, including responsive RTL review interactions. Operating
+  system notification display is not part of this local review feature.
 
 ## Non-goals for this delivery
 

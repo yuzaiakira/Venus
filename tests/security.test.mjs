@@ -164,10 +164,12 @@ test("untrusted plugin fields cannot name the zip.js codec import", () => {
   const bundle = codecs[0];
   const imports = bundle.match(/import\s*\(/g) ?? [];
   assert.equal(imports.length, 1);
-  const at = bundle.indexOf("await import(e)");
+  const dynamicImport = /await import\(([A-Za-z_$][\w$]*)\)/.exec(bundle);
+  assert.ok(dynamicImport?.[0] && dynamicImport[1]);
+  const at = bundle.indexOf(dynamicImport[0]);
   assert.ok(at > 0);
   const around = bundle.slice(Math.max(0, at - 80), at + 40);
-  assert.match(around, /&&e&&/);
+  assert.match(around, new RegExp(`&&${dynamicImport[1]}&&`));
   assert.match(bundle.slice(at, at + 180), /Invalid uncompressed size/);
   const manifest = JSON.parse(
     readFileSync(".output/firefox-mv3/manifest.json", "utf8"),

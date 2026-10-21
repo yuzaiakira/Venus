@@ -288,6 +288,8 @@ export function createWorkspace(
         db.milestones,
         db.goalRelations,
         db.weeklyReviews,
+        db.reviewSchedules,
+        db.reviewHistory,
       ],
       async () => {
         await db.widgets.where("profileId").equals(id).delete();
@@ -303,6 +305,16 @@ export function createWorkspace(
           if (goalIds.has(review.goalId))
             await db.weeklyReviews.delete(review.id);
         for (const goal of goals) await db.goals.delete(goal.id);
+        const schedules = await db.reviewSchedules
+          .where("profileId")
+          .equals(id)
+          .toArray();
+        const scheduleIds = new Set(schedules.map((schedule) => schedule.id));
+        for (const history of await db.reviewHistory.toArray())
+          if (scheduleIds.has(history.scheduleId))
+            await db.reviewHistory.delete(history.id);
+        for (const schedule of schedules)
+          await db.reviewSchedules.delete(schedule.id);
         await db.profiles.delete(id);
         if (!fallback) {
           fallback = {

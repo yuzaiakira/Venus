@@ -6,6 +6,7 @@ import {
   goals,
   plugins,
   productivity,
+  reviews,
   workspace,
 } from "../../src/infrastructure/browser-workspace";
 import "../../src/design/tokens.css";
@@ -18,6 +19,7 @@ createRoot(root).render(
     bookmarks={browserBookmarks}
     calendar={calendar}
     goals={goals}
+    reviews={reviews}
     plugins={plugins}
     online={navigator.onLine}
   />,

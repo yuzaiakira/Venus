@@ -32,6 +32,7 @@ import { canonicalHttpUrl } from "../domain/productivity";
 import { translate, type MessageKey } from "../locales/messages";
 import type { createCalendar } from "../application/calendar";
 import type { Goals, GoalsWorkspace } from "../application/goals";
+import type { Reviews, ReviewsWorkspace } from "../application/reviews";
 import type { PluginPlatform } from "../application/plugins";
 import type {
   EventRecord,
@@ -46,6 +47,7 @@ import { applyDocument, paintUploadedWallpaper } from "./document";
 import { LibraryScreen } from "./library";
 import { HabitsScreen } from "./habits";
 import { GoalsScreen } from "./goals";
+import { ReviewsScreen } from "./reviews";
 import { PluginStudio, PluginWidget } from "./plugin-studio";
 import { SettingsScreen } from "./settings";
 import { Icon } from "./icons";
@@ -63,6 +65,7 @@ export function DashboardScreen(props: {
   bookmarks: BrowserBookmarkPort;
   calendar: ReturnType<typeof createCalendar>;
   goals: Goals;
+  reviews: Reviews;
   plugins: PluginPlatform;
   online: boolean;
 }) {
@@ -98,6 +101,7 @@ export function DashboardScreen(props: {
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [library, setLibrary] = useState<Library | null>(null);
   const [goalsData, setGoalsData] = useState<GoalsWorkspace | null>(null);
+  const [reviewsData, setReviewsData] = useState<ReviewsWorkspace | null>(null);
   const [view, setView] = useState<
     | "home"
     | "notes"
@@ -108,6 +112,7 @@ export function DashboardScreen(props: {
     | "settings"
     | "habits"
     | "goals"
+    | "reviews"
   >("home");
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [reminders, setReminders] = useState<NotificationRecord[]>([]);
@@ -151,13 +156,18 @@ export function DashboardScreen(props: {
         props.productivity.load(),
         props.calendar.list(),
       ]);
-      const goalContent = await props.goals.load(
-        next.bootstrap.selectedProfileId,
-      );
+      const today = new Intl.DateTimeFormat("en-CA", {
+        timeZone: next.bootstrap.timeZone,
+      }).format(new Date());
+      const [goalContent, reviewContent] = await Promise.all([
+        props.goals.load(next.bootstrap.selectedProfileId),
+        props.reviews.load(next.bootstrap.selectedProfileId, today),
+      ]);
       if (sequence !== loadSequence.current) return;
       setSnapshot(next);
       setLibrary(content);
       setGoalsData(goalContent);
+      setReviewsData(reviewContent);
       setEvents(schedule.events);
       setReminders(schedule.notifications);
       setQuiet(schedule.quietHours);
@@ -173,7 +183,13 @@ export function DashboardScreen(props: {
     } catch {
       if (sequence === loadSequence.current) setLoadError(true);
     }
-  }, [props.workspace, props.productivity, props.calendar, props.goals]);
+  }, [
+    props.workspace,
+    props.productivity,
+    props.calendar,
+    props.goals,
+    props.reviews,
+  ]);
   async function completeOnboarding() {
     const bootstrap = await props.workspace.updatePreferences({
       onboardingComplete: true,
@@ -431,6 +447,11 @@ export function DashboardScreen(props: {
       id: "goals" as const,
       icon: "grid" as const,
       label: t("nav.goals"),
+    },
+    {
+      id: "reviews" as const,
+      icon: "note" as const,
+      label: t("nav.reviews"),
     },
     {
       id: "calendar" as const,
@@ -755,6 +776,7 @@ export function DashboardScreen(props: {
             <button
               className="btn mobile-settings"
               type="button"
+              aria-label={t("nav.settings")}
               onClick={() => setView("settings")}
             >
               {t("nav.settings")}
@@ -835,6 +857,21 @@ export function DashboardScreen(props: {
                 onOpenHabit={(id) => {
                   setFocusedHabitId(id);
                   setView("habits");
+                }}
+              />
+            ) : null}
+            {view === "reviews" && reviewsData ? (
+              <ReviewsScreen
+                profileId={profile.id}
+                data={reviewsData}
+                reviews={props.reviews}
+                locale={snapshot.bootstrap.locale}
+                timeZone={snapshot.bootstrap.timeZone}
+                online={online}
+                onChanged={reload}
+                onOpenNote={(id) => {
+                  setSelectedNoteId(id);
+                  setView("notes");
                 }}
               />
             ) : null}
@@ -937,7 +974,8 @@ export function DashboardScreen(props: {
             view !== "plugins" &&
             view !== "settings" &&
             view !== "habits" &&
-            view !== "goals" ? (
+            view !== "goals" &&
+            view !== "reviews" ? (
               <LibraryScreen
                 view={view}
                 selectedNoteId={selectedNoteId}
@@ -948,6 +986,17 @@ export function DashboardScreen(props: {
                 productivity={props.productivity}
                 bookmarks={props.bookmarks}
                 locale={snapshot.bootstrap.locale}
+                onEnrollReview={(noteId) =>
+                  props.reviews
+                    .enroll(
+                      profile.id,
+                      noteId,
+                      new Intl.DateTimeFormat("en-CA", {
+                        timeZone: snapshot.bootstrap.timeZone,
+                      }).format(new Date()),
+                    )
+                    .then(reload)
+                }
               />
             ) : null}
             {view === "home" ? (
@@ -974,7 +1023,9 @@ export function DashboardScreen(props: {
                                 ? () => setView("habits")
                                 : widget.widgetType === "goals"
                                   ? () => setView("goals")
-                                  : undefined;
+                                  : widget.widgetType === "reviews"
+                                    ? () => setView("reviews")
+                                    : undefined;
                     return (
                       <article
                         key={widget.id}
@@ -1061,6 +1112,7 @@ export function DashboardScreen(props: {
                                 tasks={library?.tasks ?? []}
                                 habits={library?.habits ?? []}
                                 goals={goalsData?.goals ?? []}
+                                reviews={reviewsData?.schedules ?? []}
                                 bookmarks={library?.bookmarks ?? []}
                                 events={events}
                                 timer={activeTimer}
@@ -1514,6 +1566,7 @@ function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
     capture: "widget.captureTitle",
     habits: "widget.habitsTitle",
     goals: "widget.goalsTitle",
+    reviews: "widget.reviewsTitle",
   };
   return t(labels[type]);
 }

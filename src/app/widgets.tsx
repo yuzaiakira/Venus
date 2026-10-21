@@ -20,6 +20,7 @@ import {
 } from "../domain/productivity";
 import type { EventRecord, TimerRecord } from "../domain/time/records";
 import type { GoalDetails } from "../application/goals";
+import type { ReviewEntry } from "../application/reviews";
 import { translate, type MessageKey } from "../locales/messages";
 import { Icon, type IconName } from "./icons";
 
@@ -98,6 +99,12 @@ const chrome: Record<
     title: "widget.goalsTitle",
     sub: "widget.goalsSub",
   },
+  reviews: {
+    icon: "note",
+    tone: "pink",
+    title: "widget.reviewsTitle",
+    sub: "widget.reviewsSub",
+  },
 };
 
 export function WidgetChrome(props: {
@@ -150,6 +157,7 @@ export function WidgetBody(props: {
   tasks: TaskRecord[];
   habits: HabitRecord[];
   goals: GoalDetails[];
+  reviews: ReviewEntry[];
   bookmarks: LocalBookmarkRecord[];
   events: EventRecord[];
   timer: TimerRecord | null;
@@ -356,6 +364,35 @@ export function WidgetBody(props: {
             </li>
           ))}
         </ul>
+      </div>
+    );
+  }
+  if (props.widget.widgetType === "reviews") {
+    const now = new Intl.DateTimeFormat("en-CA", {
+      timeZone: props.bootstrap.timeZone,
+    }).format(props.now);
+    const active = props.reviews.filter(
+      (review) =>
+        review.state === "active" && review.availability === "available",
+    );
+    const due = active.filter((review) => review.dueDate <= now);
+    const next = [...active].sort((left, right) =>
+      left.dueDate.localeCompare(right.dueDate),
+    )[0];
+    return (
+      <div>
+        <p className="briefing-lead">
+          {translate(props.bootstrap.locale, "reviews.dueToday", {
+            count: String(due.length),
+          })}
+        </p>
+        {next ? (
+          <p className="muted">
+            <bdi>{next.note?.title ?? t("reviews.noteUnavailable")}</bdi>
+          </p>
+        ) : (
+          <p className="muted">{t("reviews.queueEmpty")}</p>
+        )}
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { CalendarDatabase } from "../application/calendar";
 import type { GoalsDatabase } from "../application/goals";
+import type { ReviewsDatabase } from "../application/reviews";
 import type { ProductivityDatabase } from "../application/productivity";
 import type {
   AssetRecord,
@@ -24,6 +25,10 @@ import type {
   MilestoneRecord,
   WeeklyReviewRecord,
 } from "../domain/goals";
+import type {
+  ReviewHistoryRecord,
+  ReviewScheduleRecord,
+} from "../domain/reviews";
 import type {
   PluginInstanceRecord,
   PluginPackageRecord,
@@ -50,6 +55,8 @@ export const db = new Dexie("Venus-p00") as Dexie & {
   milestones: EntityTable<MilestoneRecord, "id">;
   goalRelations: EntityTable<GoalRelationRecord, "id">;
   weeklyReviews: EntityTable<WeeklyReviewRecord, "id">;
+  reviewSchedules: EntityTable<ReviewScheduleRecord, "id">;
+  reviewHistory: EntityTable<ReviewHistoryRecord, "id">;
   localBookmarks: EntityTable<LocalBookmarkRecord, "id">;
   bookmarkSnapshots: EntityTable<BookmarkSnapshotRecord, "id">;
   events: EntityTable<EventRecord, "id">;
@@ -162,6 +169,12 @@ db.version(9).stores({
     "id, goalId, [goalId+targetKind+targetId], targetKind, targetId",
   weeklyReviews: "id, goalId, profileId, periodStart",
 });
+// v10 is additive: Knowledge Review keeps a profile-owned schedule and local
+// outcome history while every existing note and workspace record stays intact.
+db.version(10).stores({
+  reviewSchedules: "id, profileId, noteId, [profileId+noteId], state, dueDate",
+  reviewHistory: "id, scheduleId, profileId, noteId, reviewedDate, outcome",
+});
 export const productivityDb: ProductivityDatabase = {
   notes: db.notes,
   noteDrafts: db.noteDrafts,
@@ -226,6 +239,18 @@ export const goalsDb: GoalsDatabase = {
         db.tasks,
         db.habits,
       ],
+      work,
+    ),
+};
+export const reviewsDb: ReviewsDatabase = {
+  profiles: db.profiles,
+  notes: db.notes,
+  reviewSchedules: db.reviewSchedules,
+  reviewHistory: db.reviewHistory,
+  transaction: (_mode, _tables, work) =>
+    db.transaction(
+      "rw",
+      [db.profiles, db.notes, db.reviewSchedules, db.reviewHistory],
       work,
     ),
 };

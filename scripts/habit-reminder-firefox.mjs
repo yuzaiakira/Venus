@@ -221,7 +221,15 @@ export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
         "Firefox Notification Center did not close before opening Settings",
       );
     }
-    await driver.findElement(By.css('[aria-label="Settings"]')).click();
+    const settingsControls = await driver.findElements(
+      By.css('[aria-label="Settings"]'),
+    );
+    const settings = await (async () => {
+      for (const control of settingsControls)
+        if (await control.isDisplayed()) return control;
+      throw new Error("Firefox has no visible Settings navigation control");
+    })();
+    await settings.click();
     await driver.wait(
       async () =>
         (
