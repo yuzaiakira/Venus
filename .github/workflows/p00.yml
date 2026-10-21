@@ -16,13 +16,19 @@ jobs:
       - run: npm run build:chrome
       - run: npm run test:security
   browsers:
-    # Pin the browser runner so the Chromium sandbox policy is stable and
-    # captured by the preflight evidence.
-    runs-on: ubuntu-24.04
+    # Firefox is exercised on the current hosted image. Chromium uses the
+    # supported Ubuntu 22.04 hosted VM: Ubuntu 24.04's AppArmor policy blocks
+    # its user-namespace sandbox even when chrome_sandbox is correctly setuid.
+    # The Chrome preflight below continues to require the real sandbox.
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        target: [firefox, chrome]
+        include:
+          - target: firefox
+            runner: ubuntu-24.04
+          - target: chrome
+            runner: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

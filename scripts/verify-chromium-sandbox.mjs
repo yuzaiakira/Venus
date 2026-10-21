@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -31,6 +32,18 @@ function read(path) {
   }
 }
 
+function command(binary, args) {
+  const result = spawnSync(binary, args, { encoding: "utf8", timeout: 10_000 });
+  return {
+    exitCode: result.error ? null : result.status,
+    stdout: (result.stdout ?? "").trim(),
+    stderr: [result.stderr, result.error?.message]
+      .filter(Boolean)
+      .join("\n")
+      .trim(),
+  };
+}
+
 function helperDetails() {
   if (!existsSync(sandboxHelper)) return { path: sandboxHelper, exists: false };
   const details = statSync(sandboxHelper);
@@ -57,6 +70,36 @@ const evidence = {
     appArmorUserNamespaces: read(
       "/proc/sys/kernel/apparmor_restrict_unprivileged_userns",
     ),
+    confinement: read("/proc/self/attr/current"),
+    status: read("/proc/self/status"),
+    executableMount: command("findmnt", [
+      "--target",
+      executablePath,
+      "--noheadings",
+      "--output",
+      "TARGET,SOURCE,FSTYPE,OPTIONS",
+    ]),
+    sandboxMount: command("findmnt", [
+      "--target",
+      sandboxHelper,
+      "--noheadings",
+      "--output",
+      "TARGET,SOURCE,FSTYPE,OPTIONS",
+    ]),
+    userNamespaceProbe: command("unshare", [
+      "--user",
+      "--map-root-user",
+      "true",
+    ]),
+    appArmorStatus: command("aa-status", ["--json"]),
+    kernelSandboxDenials: command("sudo", [
+      "-n",
+      "journalctl",
+      "--no-pager",
+      "--kernel",
+      "--lines=200",
+      "--grep=apparmor|DENIED|sandbox",
+    ]),
   },
   executablePath,
   sandboxHelper: helperDetails(),

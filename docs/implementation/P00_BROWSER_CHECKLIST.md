@@ -14,19 +14,34 @@ Run in fresh disposable profiles; record browser/OS/version, generated manifest,
 
 ## Chromium sandbox requirements for hosted CI
 
-Chrome acceptance runs only on the pinned GitHub-hosted `ubuntu-24.04` runner.
-It uses the exact Chromium revision installed by the repository's Playwright
-dependency in `.browser-cache`; system Chrome and Chromium are never fallbacks.
-After download, CI makes that revision's `chrome_sandbox` helper owned by
-`root:root` with mode `04755`, then launches a headed Chromium process under
-Xvfb with `chromiumSandbox: true` before loading Venus.
+Firefox acceptance runs on GitHub-hosted `ubuntu-24.04`. Chrome acceptance runs
+on GitHub-hosted `ubuntu-22.04`, using the exact Chromium revision installed by
+the repository's Playwright dependency in `.browser-cache`; system Chrome and
+Chromium are never fallbacks. The split is deliberate: the recorded Ubuntu
+24.04 runner had a root-owned `04755` `chrome_sandbox` helper and enabled
+`unprivileged_userns_clone`, but its `apparmor_restrict_unprivileged_userns=1`
+policy still caused Chromium to report `No usable sandbox`.
 
-The preflight writes `evidence/P00/chromium-sandbox.json` with the runner OS,
-LSM/AppArmor state, user-namespace settings, browser path, helper ownership and
-mode, and the actual sandboxed launch result. A failed preflight is classified
-as `ENVIRONMENT_BLOCKED`; the New Tab and Habit Reminder tests do not run and
-do not pass. The workflow never uses `--no-sandbox` or weakens Chromium's
-sandbox.
+On the Chrome runner, CI makes that revision's `chrome_sandbox` helper owned by
+`root:root` with mode `04755`, then launches a headed Chromium process under
+Xvfb with `chromiumSandbox: true` before loading Venus. The preflight writes
+`evidence/P00/chromium-sandbox.json` with the runner OS, LSM/AppArmor state,
+process confinement and status, user-namespace probe, executable and helper
+mount options, AppArmor status, accessible kernel denials, browser path, helper
+ownership and mode, and the actual sandboxed launch result. A failed preflight
+is classified as `ENVIRONMENT_BLOCKED`; the New Tab and Habit Reminder tests do
+not run and do not pass. The workflow never uses `--no-sandbox` or weakens
+Chromium's sandbox.
+
+If the hosted `ubuntu-22.04` preflight cannot start Chromium, run Chrome
+acceptance on a dedicated non-container Linux VM that meets the same preflight:
+use a non-root runner account; keep the Playwright cache on an `exec,suid,dev`
+mount; make only the selected Chromium revision's `chrome_sandbox` helper
+`root:root` and `04755`; allow the runner account to create an unprivileged user
+namespace; and preserve normal seccomp, namespace and AppArmor protections.
+The required gate is `xvfb-run npm run verify:chromium-sandbox` before either
+Chrome acceptance command. Do not use privileged containers, disable AppArmor
+globally, or pass Chromium a sandbox-bypass flag.
 
 ## Evidence status — 2026-10-09 continuation
 

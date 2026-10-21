@@ -35,7 +35,9 @@ test("Chrome CI uses Playwright Chromium with a verified sandbox", () => {
   assert.doesNotMatch(preflight, /--no-sandbox/);
 
   const workflow = readFileSync(".github/workflows/p00.yml", "utf8");
-  assert.match(workflow, /runs-on: ubuntu-24\.04/);
+  assert.match(workflow, /runs-on: \$\{\{ matrix\.runner \}\}/);
+  assert.match(workflow, /runner: ubuntu-24\.04/);
+  assert.match(workflow, /runner: ubuntu-22\.04/);
   assert.match(workflow, /sudo chown root:root/);
   assert.match(workflow, /sudo chmod 4755/);
   assert.match(workflow, /npm run verify:chromium-sandbox/);
