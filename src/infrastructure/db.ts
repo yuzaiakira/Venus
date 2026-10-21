@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { CalendarDatabase } from "../application/calendar";
+import type { GoalsDatabase } from "../application/goals";
 import type { ProductivityDatabase } from "../application/productivity";
 import type {
   AssetRecord,
@@ -17,6 +18,12 @@ import type {
   TaskRecord,
   HabitRecord,
 } from "../domain/productivity";
+import type {
+  GoalRecord,
+  GoalRelationRecord,
+  MilestoneRecord,
+  WeeklyReviewRecord,
+} from "../domain/goals";
 import type {
   PluginInstanceRecord,
   PluginPackageRecord,
@@ -39,6 +46,10 @@ export const db = new Dexie("Venus-p00") as Dexie & {
   folders: EntityTable<FolderRecord, "id">;
   tasks: EntityTable<TaskRecord, "id">;
   habits: EntityTable<HabitRecord, "id">;
+  goals: EntityTable<GoalRecord, "id">;
+  milestones: EntityTable<MilestoneRecord, "id">;
+  goalRelations: EntityTable<GoalRelationRecord, "id">;
+  weeklyReviews: EntityTable<WeeklyReviewRecord, "id">;
   localBookmarks: EntityTable<LocalBookmarkRecord, "id">;
   bookmarkSnapshots: EntityTable<BookmarkSnapshotRecord, "id">;
   events: EntityTable<EventRecord, "id">;
@@ -142,6 +153,15 @@ db.version(7).stores({ habits: "id,updatedAt,frequency" });
 // v8 adds an index for habit-owned rules; existing event/task rules retain
 // their IDs and owner fields unchanged.
 db.version(8).stores({ reminderRules: "id, eventId, taskId, habitId" });
+// v9 is additive. Existing workspace, task, habit, reminder and widget rows
+// remain untouched while profile-owned Goals & Progress records are added.
+db.version(9).stores({
+  goals: "id, profileId, status, updatedAt",
+  milestones: "id, goalId, sortIndex, targetDate",
+  goalRelations:
+    "id, goalId, [goalId+targetKind+targetId], targetKind, targetId",
+  weeklyReviews: "id, goalId, profileId, periodStart",
+});
 export const productivityDb: ProductivityDatabase = {
   notes: db.notes,
   noteDrafts: db.noteDrafts,
@@ -181,6 +201,29 @@ export const calendarDb: CalendarDatabase = {
         db.notificationOccurrences,
         db.timerSessions,
         db.quietHours,
+        db.habits,
+      ],
+      work,
+    ),
+};
+export const goalsDb: GoalsDatabase = {
+  profiles: db.profiles,
+  goals: db.goals,
+  milestones: db.milestones,
+  goalRelations: db.goalRelations,
+  weeklyReviews: db.weeklyReviews,
+  tasks: db.tasks,
+  habits: db.habits,
+  transaction: (_mode, _tables, work) =>
+    db.transaction(
+      "rw",
+      [
+        db.profiles,
+        db.goals,
+        db.milestones,
+        db.goalRelations,
+        db.weeklyReviews,
+        db.tasks,
         db.habits,
       ],
       work,

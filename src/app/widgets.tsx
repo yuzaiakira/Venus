@@ -19,6 +19,7 @@ import {
   habitStreak,
 } from "../domain/productivity";
 import type { EventRecord, TimerRecord } from "../domain/time/records";
+import type { GoalDetails } from "../application/goals";
 import { translate, type MessageKey } from "../locales/messages";
 import { Icon, type IconName } from "./icons";
 
@@ -91,6 +92,12 @@ const chrome: Record<
     title: "widget.habitsTitle",
     sub: "widget.habitsSub",
   },
+  goals: {
+    icon: "grid",
+    tone: "orange",
+    title: "widget.goalsTitle",
+    sub: "widget.goalsSub",
+  },
 };
 
 export function WidgetChrome(props: {
@@ -142,6 +149,7 @@ export function WidgetBody(props: {
   notes: NoteRecord[];
   tasks: TaskRecord[];
   habits: HabitRecord[];
+  goals: GoalDetails[];
   bookmarks: LocalBookmarkRecord[];
   events: EventRecord[];
   timer: TimerRecord | null;
@@ -321,6 +329,34 @@ export function WidgetBody(props: {
         ))}
         {!props.habits.length ? <li className="muted">No habits yet</li> : null}
       </ul>
+    );
+  }
+  if (props.widget.widgetType === "goals") {
+    const active = props.goals.filter((goal) => goal.status === "active");
+    return (
+      <div>
+        {active.length === 0 ? (
+          <p className="muted">{t("goals.empty")}</p>
+        ) : null}
+        <ul className="task-list">
+          {active.slice(0, 3).map((goal) => (
+            <li key={goal.id}>
+              <div className="task-progress">
+                <bdi>{goal.title}</bdi>
+                <strong>{goal.progressSummary.percent}%</strong>
+              </div>
+              <div className="progress-track" aria-hidden="true">
+                <span style={{ width: `${goal.progressSummary.percent}%` }} />
+              </div>
+              {goal.nextMilestone ? (
+                <small className="muted">
+                  {t("goals.nextMilestone")}: {goal.nextMilestone.title}
+                </small>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </div>
     );
   }
   if (props.widget.widgetType === "notes") {

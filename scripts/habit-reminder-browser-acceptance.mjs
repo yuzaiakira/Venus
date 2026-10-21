@@ -4,13 +4,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { chromium } from "@playwright/test";
 import { chromiumExecutable } from "./chromium-executable.mjs";
 
 // This is a production-extension test. All changes begin at the React UI;
 // IndexedDB is inspected read-only only to verify persistence and the outcome
 // of the background alarm lifecycle.
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= resolve(".browser-cache");
+const { chromium } = await import("@playwright/test");
 const extension = resolve(".output/chrome-mv3");
 const evidenceDir = resolve(
   process.env.P00_EVIDENCE_DIR ?? "evidence/habit-reminder-browser",

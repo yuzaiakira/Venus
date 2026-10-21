@@ -3,6 +3,7 @@ import { DashboardScreen } from "../../src/app/dashboard";
 import { browserBookmarks } from "../../src/infrastructure/browser-bookmarks";
 import {
   calendar,
+  goals,
   plugins,
   productivity,
   workspace,
@@ -16,6 +17,7 @@ createRoot(root).render(
     productivity={productivity}
     bookmarks={browserBookmarks}
     calendar={calendar}
+    goals={goals}
     plugins={plugins}
     online={navigator.onLine}
   />,

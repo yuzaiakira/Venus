@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const workspaceSchemaVersion = 5;
+export const workspaceSchemaVersion = 6;
 export const logicalColumns = 4;
 export const maxAssetBytes = 5 * 1024 * 1024;
 export const maxAssetPixels = 8_000_000;
@@ -26,6 +26,7 @@ export const widgetTypes = [
   "briefing",
   "capture",
   "habits",
+  "goals",
 ] as const;
 export const sharedKinds = ["note", "task", "event", "bookmark"] as const;
 export const allowedMime = ["image/png", "image/jpeg", "image/webp"] as const;
@@ -60,6 +61,7 @@ export const ModuleFlagsSchema = z
     briefing: z.boolean(),
     capture: z.boolean(),
     habits: z.boolean(),
+    goals: z.boolean(),
   })
   .strict();
 export const BootstrapSchema = z
@@ -155,6 +157,8 @@ export const defaultModules: Bootstrap["modules"] = {
   briefing: true,
   capture: true,
   habits: true,
+  // Goals is available to add but is never inserted into an existing layout.
+  goals: true,
 };
 
 export function defaultBootstrap(timeZone = "UTC"): Bootstrap {

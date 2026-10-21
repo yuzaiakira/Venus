@@ -31,6 +31,7 @@ import {
 import { canonicalHttpUrl } from "../domain/productivity";
 import { translate, type MessageKey } from "../locales/messages";
 import type { createCalendar } from "../application/calendar";
+import type { Goals, GoalsWorkspace } from "../application/goals";
 import type { PluginPlatform } from "../application/plugins";
 import type {
   EventRecord,
@@ -44,6 +45,7 @@ import { NotificationCenter } from "./notification-center";
 import { applyDocument, paintUploadedWallpaper } from "./document";
 import { LibraryScreen } from "./library";
 import { HabitsScreen } from "./habits";
+import { GoalsScreen } from "./goals";
 import { PluginStudio, PluginWidget } from "./plugin-studio";
 import { SettingsScreen } from "./settings";
 import { Icon } from "./icons";
@@ -60,6 +62,7 @@ export function DashboardScreen(props: {
   productivity: Productivity;
   bookmarks: BrowserBookmarkPort;
   calendar: ReturnType<typeof createCalendar>;
+  goals: Goals;
   plugins: PluginPlatform;
   online: boolean;
 }) {
@@ -94,6 +97,7 @@ export function DashboardScreen(props: {
   const loadSequence = useRef(0);
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const [library, setLibrary] = useState<Library | null>(null);
+  const [goalsData, setGoalsData] = useState<GoalsWorkspace | null>(null);
   const [view, setView] = useState<
     | "home"
     | "notes"
@@ -103,6 +107,7 @@ export function DashboardScreen(props: {
     | "plugins"
     | "settings"
     | "habits"
+    | "goals"
   >("home");
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [reminders, setReminders] = useState<NotificationRecord[]>([]);
@@ -146,9 +151,13 @@ export function DashboardScreen(props: {
         props.productivity.load(),
         props.calendar.list(),
       ]);
+      const goalContent = await props.goals.load(
+        next.bootstrap.selectedProfileId,
+      );
       if (sequence !== loadSequence.current) return;
       setSnapshot(next);
       setLibrary(content);
+      setGoalsData(goalContent);
       setEvents(schedule.events);
       setReminders(schedule.notifications);
       setQuiet(schedule.quietHours);
@@ -164,7 +173,7 @@ export function DashboardScreen(props: {
     } catch {
       if (sequence === loadSequence.current) setLoadError(true);
     }
-  }, [props.workspace, props.productivity, props.calendar]);
+  }, [props.workspace, props.productivity, props.calendar, props.goals]);
   async function completeOnboarding() {
     const bootstrap = await props.workspace.updatePreferences({
       onboardingComplete: true,
@@ -417,6 +426,11 @@ export function DashboardScreen(props: {
       id: "habits" as const,
       icon: "checkCircle" as const,
       label: t("widget.habitsTitle"),
+    },
+    {
+      id: "goals" as const,
+      icon: "grid" as const,
+      label: t("nav.goals"),
     },
     {
       id: "calendar" as const,
@@ -805,6 +819,25 @@ export function DashboardScreen(props: {
                 focusHabitId={focusedHabitId}
               />
             ) : null}
+            {view === "goals" && goalsData ? (
+              <GoalsScreen
+                profileId={profile.id}
+                data={goalsData}
+                goals={props.goals}
+                locale={snapshot.bootstrap.locale}
+                timeZone={snapshot.bootstrap.timeZone}
+                online={online}
+                onChanged={reload}
+                onOpenTask={(id) => {
+                  setSelectedTaskId(id);
+                  setView("tasks");
+                }}
+                onOpenHabit={(id) => {
+                  setFocusedHabitId(id);
+                  setView("habits");
+                }}
+              />
+            ) : null}
             {view === "home" ? (
               <>
                 <section className="hero card-glass" aria-label={t("nav.home")}>
@@ -903,7 +936,8 @@ export function DashboardScreen(props: {
             view !== "calendar" &&
             view !== "plugins" &&
             view !== "settings" &&
-            view !== "habits" ? (
+            view !== "habits" &&
+            view !== "goals" ? (
               <LibraryScreen
                 view={view}
                 selectedNoteId={selectedNoteId}
@@ -938,7 +972,9 @@ export function DashboardScreen(props: {
                               ? () => setView("bookmarks")
                               : widget.widgetType === "habits"
                                 ? () => setView("habits")
-                                : undefined;
+                                : widget.widgetType === "goals"
+                                  ? () => setView("goals")
+                                  : undefined;
                     return (
                       <article
                         key={widget.id}
@@ -1024,6 +1060,7 @@ export function DashboardScreen(props: {
                                 notes={library?.notes ?? []}
                                 tasks={library?.tasks ?? []}
                                 habits={library?.habits ?? []}
+                                goals={goalsData?.goals ?? []}
                                 bookmarks={library?.bookmarks ?? []}
                                 events={events}
                                 timer={activeTimer}
@@ -1476,6 +1513,7 @@ function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
     briefing: "widget.briefingTitle",
     capture: "widget.captureTitle",
     habits: "widget.habitsTitle",
+    goals: "widget.goalsTitle",
   };
   return t(labels[type]);
 }

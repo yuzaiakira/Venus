@@ -2,7 +2,7 @@
 
 **Status:** Active implementation plan  
 **Owner:** Venus product team  
-**Updated:** 2026-10-20
+**Updated:** 2026-10-21
 
 ## Purpose
 
@@ -46,7 +46,7 @@ equivalent transactional service operation.
 | Quick Capture       | Save an idea in seconds             | Capture task, note or event; title-first entry; Today toggle; clear success/failure state          | Uses existing local capture services                              | ✅ Implemented |
 | AI Inbox            | Triage incoming material            | Review queue, classify to task/note/event, confidence/explanation, edit before save, reject/undo   | Local rules first; no remote AI without explicit opt-in           | ⬜ Planned     |
 | Habit Tracker       | Maintain routines                   | Daily/weekly habits, check-in, streak, schedule, missed state, history and reminder integration    | Local habit/check-in records                                      | 🟡 Implementation verified; browser acceptance pending |
-| Goals & Progress    | Connect work to outcomes            | Goals, time frame, measurable progress, linked tasks/habits, milestones, weekly review             | Local goal, milestone and relation records                        | ⬜ Planned     |
+| Goals & Progress    | Connect work to outcomes            | Goals, time frame, measurable progress, linked tasks/habits, milestones, weekly review             | Local goal, milestone and relation records                        | 🟡 Implementation verified; browser acceptance pending |
 | Weather & Commute   | Prepare for the next commitment     | Location consent, forecast, event travel buffer, refresh time, graceful unavailable state          | Location/network are opt-in; cache minimally                      | ⬜ Planned     |
 | Focus Coach         | Protect usable focus time           | Free-time suggestions, start timer, defer/snooze, explain conflicts, never auto-edit calendar      | Reads local tasks/events/timer; recommendations local first       | ⬜ Planned     |
 | People & Follow-ups | Remember relationships and promises | People, next follow-up, notes, contact method, snooze/done, due reminders                          | Local people/follow-up records; no address-book access by default | ⬜ Planned     |
@@ -61,8 +61,8 @@ equivalent transactional service operation.
    direct actions. ✅ Implemented
 3. **Quick Capture** — a dashboard capture card using existing creation flows. ✅ Implemented
 4. **Habit Tracker** — local schema, history, dashboard card and reminder workflow. 🟡 Implementation verified; browser acceptance pending.
-5. **Goals & Progress** — goals/milestones and task/habit links. ⬜
-6. **Knowledge Review** — review scheduling for existing notes. ⬜
+5. **Goals & Progress** — goals/milestones and task/habit links. 🟡 Implementation verified; browser acceptance pending.
+6. **Knowledge Review** — review scheduling for existing notes. ⬜ **Next milestone**
 7. **People & Follow-ups** — local CRM-style follow-up flow. ⬜
 8. **Focus Coach** — explainable schedule-aware suggestions. ⬜
 9. **AI Inbox** — local triage queue; remote provider only after an explicit
@@ -99,6 +99,24 @@ gate while this cloud environment cannot launch a supported browser.
 - **Release readiness:** blocked on successful Firefox and Chrome acceptance;
   native notification API acceptance and operating-system notification display
   are separately recorded and are never inferred from application tests.
+
+## Goals & Progress verification status — 2026-10-21
+
+- **Implementation and automated tests:** verified. Dexie v9 adds profile-owned
+  goals, milestones, task/habit relations and weekly reviews without changing
+  existing workspace records. Automated tests cover the v8 → v9 upgrade,
+  explicit manual/task/habit progress semantics, CRUD, revisions, stale links,
+  profile isolation, persistence, opt-in singleton registration and layout
+  preservation.
+- **PDR widget acceptance:** implemented. The widget is available through
+  **Customize → Add widget**, remains absent from existing layouts, and links
+  to the full local Goals module. Removing the widget does not remove goals.
+- **Real-browser acceptance:** pending. The supported Firefox/Chrome flows have
+  not yet exercised Goals & Progress. This is separate from the existing Habit
+  Tracker browser evidence and is not inferred from builds or automated data
+  tests.
+- **Release readiness:** browser acceptance remains open; the next independent
+  PDR delivery milestone is **Knowledge Review**.
 
 ## Non-goals for this delivery
 

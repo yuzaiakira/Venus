@@ -279,27 +279,50 @@ export function createWorkspace(
       (profile) => profile.id !== id,
     );
     let fallback = remaining[0];
-    await db.transaction("rw", db.profiles, db.widgets, async () => {
-      await db.widgets.where("profileId").equals(id).delete();
-      await db.profiles.delete(id);
-      if (!fallback) {
-        fallback = {
-          id: crypto.randomUUID(),
-          title: "Minimal",
-          preset: "minimal",
-          themeMode: null,
-          wallpaper: null,
-          blurPx: null,
-          glassAlpha: null,
-          accent: null,
-          ...stamp(),
-        };
-        await db.profiles.add(fallback);
-        await db.widgets.bulkAdd(
-          layoutFor("minimal").map((item) => widgetFrom(fallback!.id, item)),
-        );
-      }
-    });
+    await db.transaction(
+      "rw",
+      [
+        db.profiles,
+        db.widgets,
+        db.goals,
+        db.milestones,
+        db.goalRelations,
+        db.weeklyReviews,
+      ],
+      async () => {
+        await db.widgets.where("profileId").equals(id).delete();
+        const goals = await db.goals.where("profileId").equals(id).toArray();
+        const goalIds = new Set(goals.map((goal) => goal.id));
+        for (const milestone of await db.milestones.toArray())
+          if (goalIds.has(milestone.goalId))
+            await db.milestones.delete(milestone.id);
+        for (const relation of await db.goalRelations.toArray())
+          if (goalIds.has(relation.goalId))
+            await db.goalRelations.delete(relation.id);
+        for (const review of await db.weeklyReviews.toArray())
+          if (goalIds.has(review.goalId))
+            await db.weeklyReviews.delete(review.id);
+        for (const goal of goals) await db.goals.delete(goal.id);
+        await db.profiles.delete(id);
+        if (!fallback) {
+          fallback = {
+            id: crypto.randomUUID(),
+            title: "Minimal",
+            preset: "minimal",
+            themeMode: null,
+            wallpaper: null,
+            blurPx: null,
+            glassAlpha: null,
+            accent: null,
+            ...stamp(),
+          };
+          await db.profiles.add(fallback);
+          await db.widgets.bulkAdd(
+            layoutFor("minimal").map((item) => widgetFrom(fallback!.id, item)),
+          );
+        }
+      },
+    );
     if (!fallback) throw new WorkspaceError("storageError");
     const bootstrap = await readBootstrap();
     if (bootstrap.selectedProfileId === id) {

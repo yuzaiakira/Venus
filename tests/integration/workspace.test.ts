@@ -172,8 +172,9 @@ it("migrates v2 preferences and keeps assistant widgets singleton per profile", 
     memoryPreferences({ "venus.bootstrap": legacy }),
   );
   const first = await workspace.load();
-  expect(first.bootstrap.schemaVersion).toBe(5);
+  expect(first.bootstrap.schemaVersion).toBe(6);
   expect(first.bootstrap.modules.briefing).toBe(true);
+  expect(first.bootstrap.modules.goals).toBe(true);
   const profile = first.profiles[0];
   if (!profile) throw new Error("missing profile");
   const one = await workspace.addWidget(profile.id, "briefing");

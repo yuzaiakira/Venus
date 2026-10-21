@@ -43,6 +43,16 @@ test("Chrome CI uses Playwright Chromium with a verified sandbox", () => {
   assert.match(workflow, /npm run verify:chromium-sandbox/);
   assert.doesNotMatch(workflow, /--no-sandbox/);
 });
+test("Habit Reminder acceptance selects the Playwright cache before importing Playwright", () => {
+  const source = readFileSync(
+    "scripts/habit-reminder-browser-acceptance.mjs",
+    "utf8",
+  );
+  const cache = source.indexOf("PLAYWRIGHT_BROWSERS_PATH ??=");
+  const playwright = source.indexOf('import("@playwright/test")');
+  assert.ok(cache >= 0 && playwright > cache);
+  assert.doesNotMatch(source, /chromiumSandbox:\s*false|--no-sandbox/);
+});
 test("reviewed shell-quote override preserves fx-runner argument parsing", () => {
   const require = createRequire(import.meta.url);
   const runner = require("fx-runner/lib/run.js");
