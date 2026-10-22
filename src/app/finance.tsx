@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import type { Finance, FinanceWorkspace } from "../application/finance";
-import { formatMoney, parseMinor, type FinanceKind } from "../domain/finance";
+import {
+  formatMoney,
+  parseMinor,
+  type AccountRecord,
+  type FinanceKind,
+} from "../domain/finance";
 import { translate, type MessageKey } from "../locales/messages";
 
 type Locale = "en" | "fa";
@@ -39,6 +44,7 @@ export function FinanceScreen(props: {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [accountName, setAccountName] = useState("");
+  const [accountType, setAccountType] = useState<AccountRecord["type"]>("bank");
   const [currency, setCurrency] = useState("USD");
   const [opening, setOpening] = useState("0");
   const [categoryName, setCategoryName] = useState("");
@@ -207,6 +213,24 @@ export function FinanceScreen(props: {
             />
           </label>
           <label>
+            {t("finance.accountType")}
+            <select
+              className="select"
+              value={accountType}
+              onChange={(event) =>
+                setAccountType(
+                  event.currentTarget.value as AccountRecord["type"],
+                )
+              }
+            >
+              {(["cash", "bank", "card", "other"] as const).map((type) => (
+                <option key={type} value={type}>
+                  {t(`finance.${type}` as MessageKey)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
             {t("finance.opening")}
             <input
               className="field"
@@ -224,7 +248,7 @@ export function FinanceScreen(props: {
             void run(async () => {
               await props.finance.createAccount(props.profileId, {
                 name: accountName,
-                type: "bank",
+                type: accountType,
                 currency,
                 openingBalanceMinor: signedMinor(opening, currency),
               });
