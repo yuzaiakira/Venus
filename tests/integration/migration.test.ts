@@ -21,7 +21,7 @@ describe("Dexie version 3 migration", () => {
   it("opens version 3 without deleting version 1 probes", async () => {
     const { db } = await import("../../src/infrastructure/db");
     await db.open();
-    expect(db.verno).toBe(14);
+    expect(db.verno).toBe(15);
     expect(await db.probes.get(probe.id)).toMatchObject({
       state: "pending",
       dueAt: 5,
@@ -31,6 +31,12 @@ describe("Dexie version 3 migration", () => {
       "bookmarkSnapshots",
       "commutePlans",
       "events",
+      "financeAccounts",
+      "financeBillPayments",
+      "financeBills",
+      "financeBudgets",
+      "financeCategories",
+      "financeTransactions",
       "focusDeferrals",
       "folders",
       "followUps",
@@ -166,7 +172,7 @@ describe("Dexie version 3 migration", () => {
     });
     version4.close();
     await db.open();
-    expect(db.verno).toBe(14);
+    expect(db.verno).toBe(15);
     expect(await db.probes.get(probe.id)).toMatchObject({ state: "pending" });
     expect(
       await db.notes.get("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
@@ -297,7 +303,7 @@ it("preserves a realistic version 6 workspace and persists habit check-ins after
   });
   legacy.close();
   await db.open();
-  expect(db.verno).toBe(14);
+  expect(db.verno).toBe(15);
   expect(db.tables.some((table) => table.name === "habits")).toBe(true);
   expect((await db.profiles.get(profileId))?.id).toBe(profileId);
   expect((await db.widgets.toArray())[0]?.profileId).toBe(profileId);
@@ -351,6 +357,12 @@ it("adds the habit reminder index from v7 while preserving event and task remind
             "weatherLocations",
             "weatherForecasts",
             "commutePlans",
+            "financeAccounts",
+            "financeCategories",
+            "financeTransactions",
+            "financeBudgets",
+            "financeBills",
+            "financeBillPayments",
           ].includes(String(name)) === false,
       ),
   );
@@ -393,7 +405,7 @@ it("adds the habit reminder index from v7 while preserving event and task remind
   await legacy.table("notificationOccurrences").put(oldNotification);
   legacy.close();
   await db.open();
-  expect(db.verno).toBe(14);
+  expect(db.verno).toBe(15);
   expect(await db.reminderRules.get(eventRule)).toMatchObject({
     eventId: "33333333-3333-4333-8333-333333333333",
     taskId: null,
@@ -434,6 +446,12 @@ it("additively upgrades a realistic v8 workspace through v14 and persists Goals 
             "weatherLocations",
             "weatherForecasts",
             "commutePlans",
+            "financeAccounts",
+            "financeCategories",
+            "financeTransactions",
+            "financeBudgets",
+            "financeBills",
+            "financeBillPayments",
           ].includes(table.name),
       )
       .map((table) => {
@@ -506,7 +524,7 @@ it("additively upgrades a realistic v8 workspace through v14 and persists Goals 
   legacy.close();
 
   await db.open();
-  expect(db.verno).toBe(14);
+  expect(db.verno).toBe(15);
   expect(db.tables.some((table) => table.name === "goals")).toBe(true);
   expect(db.goals.schema.idxByName.profileId).toBeDefined();
   expect(
@@ -560,6 +578,12 @@ it("additively upgrades a realistic v9 workspace through v14 and preserves recor
             "weatherLocations",
             "weatherForecasts",
             "commutePlans",
+            "financeAccounts",
+            "financeCategories",
+            "financeTransactions",
+            "financeBudgets",
+            "financeBills",
+            "financeBillPayments",
           ].includes(table.name),
       )
       .map((table) => {
@@ -627,7 +651,7 @@ it("additively upgrades a realistic v9 workspace through v14 and preserves recor
   legacy.close();
 
   await db.open();
-  expect(db.verno).toBe(14);
+  expect(db.verno).toBe(15);
   expect(
     db.reviewSchedules.schema.idxByName["[profileId+noteId]"],
   ).toBeDefined();
@@ -678,6 +702,12 @@ it("additively upgrades a realistic v10 workspace through v14 and preserves ever
             "weatherLocations",
             "weatherForecasts",
             "commutePlans",
+            "financeAccounts",
+            "financeCategories",
+            "financeTransactions",
+            "financeBudgets",
+            "financeBills",
+            "financeBillPayments",
           ].includes(table.name),
       )
       .map((table) => [
@@ -768,7 +798,7 @@ it("additively upgrades a realistic v10 workspace through v14 and preserves ever
   legacy.close();
 
   await db.open();
-  expect(db.verno).toBe(14);
+  expect(db.verno).toBe(15);
   expect(db.people.schema.idxByName.profileId).toBeDefined();
   expect(db.followUps.schema.idxByName["[profileId+personId]"]).toBeDefined();
   expect(db.reminderRules.schema.idxByName.followUpId).toBeDefined();
@@ -839,6 +869,12 @@ it("additively upgrades a realistic v11 workspace to v14 without changing record
             "weatherLocations",
             "weatherForecasts",
             "commutePlans",
+            "financeAccounts",
+            "financeCategories",
+            "financeTransactions",
+            "financeBudgets",
+            "financeBills",
+            "financeBillPayments",
           ].includes(table.name),
       )
       .map((table) => [
@@ -907,7 +943,7 @@ it("additively upgrades a realistic v11 workspace to v14 without changing record
   legacy.close();
 
   await db.open();
-  expect(db.verno).toBe(14);
+  expect(db.verno).toBe(15);
   expect(
     db.focusDeferrals.schema.idxByName["[profileId+taskId]"],
   ).toBeDefined();
@@ -966,6 +1002,12 @@ it("additively upgrades a realistic v12 workspace through v14, preserves records
             "weatherLocations",
             "weatherForecasts",
             "commutePlans",
+            "financeAccounts",
+            "financeCategories",
+            "financeTransactions",
+            "financeBudgets",
+            "financeBills",
+            "financeBillPayments",
           ].includes(table.name),
       )
       .map((table) => [
@@ -1047,7 +1089,7 @@ it("additively upgrades a realistic v12 workspace through v14, preserves records
   });
   legacy.close();
   await db.open();
-  expect(db.verno).toBe(14);
+  expect(db.verno).toBe(15);
   expect(db.inboxItems.schema.idxByName.profileId).toBeDefined();
   expect(await db.tasks.get(taskId)).toMatchObject({
     id: taskId,

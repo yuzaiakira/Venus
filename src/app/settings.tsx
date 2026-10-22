@@ -93,6 +93,7 @@ export function SettingsScreen(props: {
         focus: "widget.focusCoachTitle",
         inbox: "widget.inboxTitle",
         weather: "widget.weatherTitle",
+        finance: "widget.financeTitle",
       }[type] as MessageKey,
     );
   if (!snapshot) {
@@ -687,6 +688,7 @@ export function SettingsScreen(props: {
                       focus: true,
                       inbox: true,
                       weather: true,
+                      finance: true,
                     },
                   });
                 if (confirming === "profile" && profile)

@@ -299,6 +299,12 @@ export function createWorkspace(
         db.weatherLocations,
         db.weatherForecasts,
         db.commutePlans,
+        db.financeAccounts,
+        db.financeCategories,
+        db.financeTransactions,
+        db.financeBudgets,
+        db.financeBills,
+        db.financeBillPayments,
         db.reminderRules,
         db.notificationOccurrences,
       ],
@@ -357,6 +363,12 @@ export function createWorkspace(
         await db.weatherLocations.where("profileId").equals(id).delete();
         await db.weatherForecasts.where("profileId").equals(id).delete();
         await db.commutePlans.where("profileId").equals(id).delete();
+        await db.financeAccounts.where("profileId").equals(id).delete();
+        await db.financeCategories.where("profileId").equals(id).delete();
+        await db.financeTransactions.where("profileId").equals(id).delete();
+        await db.financeBudgets.where("profileId").equals(id).delete();
+        await db.financeBills.where("profileId").equals(id).delete();
+        await db.financeBillPayments.where("profileId").equals(id).delete();
         await db.profiles.delete(id);
         if (!fallback) {
           fallback = {

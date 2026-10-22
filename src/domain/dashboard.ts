@@ -32,6 +32,7 @@ export const widgetTypes = [
   "focus",
   "inbox",
   "weather",
+  "finance",
 ] as const;
 export const sharedKinds = ["note", "task", "event", "bookmark"] as const;
 export const allowedMime = ["image/png", "image/jpeg", "image/webp"] as const;
@@ -72,6 +73,7 @@ export const ModuleFlagsSchema = z
     focus: z.boolean(),
     inbox: z.boolean(),
     weather: z.boolean(),
+    finance: z.boolean(),
   })
   .strict();
 export const BootstrapSchema = z
@@ -179,6 +181,8 @@ export const defaultModules: Bootstrap["modules"] = {
   inbox: true,
   // Weather & Commute is opt-in and never changes a saved dashboard.
   weather: true,
+  // Finance Snapshot is opt-in and never changes a saved dashboard.
+  finance: true,
 };
 
 export function defaultBootstrap(timeZone = "UTC"): Bootstrap {

@@ -16,6 +16,12 @@ it("additively upgrades a realistic v13 workspace to v14 without losing Inbox, f
             "weatherLocations",
             "weatherForecasts",
             "commutePlans",
+            "financeAccounts",
+            "financeCategories",
+            "financeTransactions",
+            "financeBudgets",
+            "financeBills",
+            "financeBillPayments",
           ].includes(table.name),
       )
       .map((table) => [
@@ -103,7 +109,7 @@ it("additively upgrades a realistic v13 workspace to v14 without losing Inbox, f
   });
   legacy.close();
   await db.open();
-  expect(db.verno).toBe(14);
+  expect(db.verno).toBe(15);
   expect(db.weatherProfiles.schema.idxByName.profileId).toBeDefined();
   expect(
     db.weatherProfiles.schema.indexes.some(

@@ -6,6 +6,7 @@ import {
   focus,
   inbox,
   weather,
+  finance,
   goals,
   plugins,
   people,
@@ -30,6 +31,7 @@ createRoot(root).render(
     focus={focus}
     inbox={inbox}
     weather={weather}
+    finance={finance}
     plugins={plugins}
     online={navigator.onLine}
   />,

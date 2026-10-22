@@ -39,6 +39,8 @@ import type { FocusWorkspace } from "../domain/focus";
 import type { Inbox } from "../application/inbox";
 import type { InboxWorkspace } from "../application/inbox";
 import type { Weather, WeatherWorkspace } from "../application/weather";
+import type { Finance, FinanceWorkspace } from "../application/finance";
+import { monthFor } from "../domain/finance";
 import type { PluginPlatform } from "../application/plugins";
 import type {
   EventRecord,
@@ -58,6 +60,7 @@ import { PeopleScreen } from "./people";
 import { FocusScreen } from "./focus";
 import { InboxScreen } from "./inbox";
 import { WeatherScreen } from "./weather";
+import { FinanceScreen } from "./finance";
 import { PluginStudio, PluginWidget } from "./plugin-studio";
 import { SettingsScreen } from "./settings";
 import { Icon } from "./icons";
@@ -80,6 +83,7 @@ export function DashboardScreen(props: {
   focus: Focus;
   inbox: Inbox;
   weather: Weather;
+  finance: Finance;
   plugins: PluginPlatform;
   online: boolean;
 }) {
@@ -123,6 +127,8 @@ export function DashboardScreen(props: {
   const [focusData, setFocusData] = useState<FocusWorkspace | null>(null);
   const [inboxData, setInboxData] = useState<InboxWorkspace | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherWorkspace | null>(null);
+  const [financeData, setFinanceData] = useState<FinanceWorkspace | null>(null);
+  const [financeMonth, setFinanceMonth] = useState<string | null>(null);
   const [inboxCapture, setInboxCapture] = useState(0);
   const [view, setView] = useState<
     | "home"
@@ -139,6 +145,7 @@ export function DashboardScreen(props: {
     | "focus"
     | "inbox"
     | "weather"
+    | "finance"
   >("home");
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [reminders, setReminders] = useState<NotificationRecord[]>([]);
@@ -192,6 +199,7 @@ export function DashboardScreen(props: {
         focusContent,
         inboxContent,
         weatherContent,
+        financeContent,
       ] = await Promise.all([
         props.goals.load(next.bootstrap.selectedProfileId),
         props.reviews.load(next.bootstrap.selectedProfileId, today),
@@ -202,6 +210,11 @@ export function DashboardScreen(props: {
         ),
         props.inbox.load(next.bootstrap.selectedProfileId),
         props.weather.load(next.bootstrap.selectedProfileId),
+        props.finance.load(
+          next.bootstrap.selectedProfileId,
+          financeMonth ?? monthFor(new Date(), next.bootstrap.timeZone),
+          today,
+        ),
       ]);
       if (sequence !== loadSequence.current) return;
       setSnapshot(next);
@@ -212,6 +225,7 @@ export function DashboardScreen(props: {
       setFocusData(focusContent);
       setInboxData(inboxContent);
       setWeatherData(weatherContent);
+      setFinanceData(financeContent);
       setEvents(schedule.events);
       setReminders(schedule.notifications);
       setQuiet(schedule.quietHours);
@@ -237,6 +251,8 @@ export function DashboardScreen(props: {
     props.focus,
     props.inbox,
     props.weather,
+    props.finance,
+    financeMonth,
   ]);
   async function completeOnboarding() {
     const bootstrap = await props.workspace.updatePreferences({
@@ -517,6 +533,7 @@ export function DashboardScreen(props: {
       icon: "calendar" as const,
       label: t("nav.weather"),
     },
+    { id: "finance" as const, icon: "grid" as const, label: t("nav.finance") },
     {
       id: "calendar" as const,
       icon: "calendar" as const,
@@ -1026,6 +1043,17 @@ export function DashboardScreen(props: {
                 }}
               />
             ) : null}
+            {view === "finance" && financeData ? (
+              <FinanceScreen
+                profileId={profile.id}
+                data={financeData}
+                finance={props.finance}
+                locale={snapshot.bootstrap.locale}
+                online={online}
+                onChanged={reload}
+                onMonth={async (month) => setFinanceMonth(month)}
+              />
+            ) : null}
             {view === "home" ? (
               <>
                 <section className="hero card-glass" aria-label={t("nav.home")}>
@@ -1130,7 +1158,8 @@ export function DashboardScreen(props: {
             view !== "people" &&
             view !== "focus" &&
             view !== "inbox" &&
-            view !== "weather" ? (
+            view !== "weather" &&
+            view !== "finance" ? (
               <LibraryScreen
                 view={view}
                 selectedNoteId={selectedNoteId}
@@ -1188,7 +1217,9 @@ export function DashboardScreen(props: {
                                           ? () => setView("inbox")
                                           : widget.widgetType === "weather"
                                             ? () => setView("weather")
-                                            : undefined;
+                                            : widget.widgetType === "finance"
+                                              ? () => setView("finance")
+                                              : undefined;
                     return (
                       <article
                         key={widget.id}
@@ -1280,6 +1311,7 @@ export function DashboardScreen(props: {
                                 focus={focusData}
                                 inbox={inboxData}
                                 weather={weatherData}
+                                finance={financeData}
                                 bookmarks={library?.bookmarks ?? []}
                                 events={events}
                                 timer={activeTimer}
@@ -1763,6 +1795,7 @@ function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
     focus: "widget.focusCoachTitle",
     inbox: "widget.inboxTitle",
     weather: "widget.weatherTitle",
+    finance: "widget.financeTitle",
   };
   return t(labels[type]);
 }

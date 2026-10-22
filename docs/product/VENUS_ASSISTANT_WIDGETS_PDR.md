@@ -50,7 +50,7 @@ equivalent transactional service operation.
 | Weather & Commute   | Prepare for the next commitment     | Location consent, forecast, event travel buffer, refresh time, graceful unavailable state          | Location/network are opt-in; cache minimally                      | 🟡 Implementation verified; browser acceptance pending |
 | Focus Coach         | Protect usable focus time           | Free-time suggestions, start timer, defer/snooze, explain conflicts, never auto-edit calendar      | Reads local tasks/events/timer; recommendations local first       | 🟡 Implementation verified; browser acceptance pending |
 | People & Follow-ups | Remember relationships and promises | People, next follow-up, notes, contact method, snooze/done, due reminders                          | Local people/follow-up records; no address-book access by default | 🟡 Implementation verified; browser acceptance pending |
-| Finance Snapshot    | See commitments and budget          | Manual accounts/categories, monthly budget, upcoming bills, totals, period selector, export/delete | Local financial records; no banking connection by default         | ⬜ Planned                                             |
+| Finance Snapshot    | See commitments and budget          | Manual accounts/categories, monthly budget, upcoming bills, totals, period selector, export/delete | Local financial records; no banking connection by default         | 🟡 Implementation verified; browser acceptance pending |
 | Knowledge Review    | Revisit useful information          | Spaced review queue, surface notes, rate recall, postpone, links to notes                          | Local note-review schedule only                                   | 🟡 Implementation verified; browser acceptance pending |
 
 ## Delivery sequence
@@ -70,7 +70,7 @@ equivalent transactional service operation.
    product decision and consent design. 🟡 Implementation verified; browser acceptance pending.
 10. **Weather & Commute** — provider, location and network-consent design. 🟡 Implementation verified; browser acceptance pending.
 11. **Finance Snapshot** — manual-first ledger, budget and export/delete
-    workflows.
+    workflows. 🟡 Implementation verified; browser acceptance pending.
 
 ## Definition of done for each widget
 
@@ -258,7 +258,30 @@ gate while this cloud environment cannot launch a supported browser.
   official Firefox and secure Chromium extension exercises. OS location consent
   is also separate from browser/API test success.
 - **Release readiness:** implementation is verified; browser acceptance remains
-  open. The next independent PDR delivery milestone is **Finance Snapshot**.
+  open.
+
+## Finance Snapshot verification status — 2026-10-22
+
+- **Implementation and automated tests:** verified. Dexie v15 adds only
+  profile-owned accounts, categories, integer-minor-unit transactions, budgets,
+  bills and idempotent payment receipts. The v14 → v15 migration preserves
+  Weather, Inbox, profile and widget records. Amount parsing rejects unsupported
+  precision instead of rounding; zero- and three-decimal currencies are
+  formatted correctly, and summaries never fabricate a currency conversion.
+- **PDR widget acceptance:** implemented. The local-only module provides
+  account balances, income/expense and transfer entry, categories, budgets,
+  one-off/monthly/yearly bills, payment recording, period navigation, JSON/CSV
+  export and a confirmed finance-only delete operation. CSV neutralizes
+  spreadsheet formulas. The opt-in singleton widget persists its layout and
+  opens the full module; removing it never deletes financial data.
+- **Real-browser acceptance:** pending. The supported Firefox and securely
+  sandboxed Chromium extension workflows have not run in this cloud runtime.
+  Browser responsiveness, RTL interaction and download behavior require that
+  release-validation environment. GitHub Actions run 39842419216 failed before
+  any job steps were recorded, which is infrastructure/startup evidence rather
+  than an application test result.
+- **Release readiness:** PDR implementation delivery is complete; full release
+  acceptance remains open for cross-widget Firefox and Chromium execution.
 
 ## Non-goals for this delivery
 

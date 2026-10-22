@@ -25,6 +25,8 @@ import type { PeopleWorkspace } from "../application/people";
 import type { FocusWorkspace } from "../domain/focus";
 import type { InboxWorkspace } from "../application/inbox";
 import type { WeatherWorkspace } from "../application/weather";
+import type { FinanceWorkspace } from "../application/finance";
+import { formatMoney } from "../domain/finance";
 import { translate, type MessageKey } from "../locales/messages";
 import { Icon, type IconName } from "./icons";
 
@@ -133,6 +135,12 @@ const chrome: Record<
     title: "widget.weatherTitle",
     sub: "widget.weatherSub",
   },
+  finance: {
+    icon: "grid",
+    tone: "orange",
+    title: "widget.financeTitle",
+    sub: "widget.financeSub",
+  },
 };
 
 export function WidgetChrome(props: {
@@ -190,6 +198,7 @@ export function WidgetBody(props: {
   focus: FocusWorkspace | null;
   inbox: InboxWorkspace | null;
   weather: WeatherWorkspace | null;
+  finance: FinanceWorkspace | null;
   bookmarks: LocalBookmarkRecord[];
   events: EventRecord[];
   timer: TimerRecord | null;
@@ -418,6 +427,41 @@ export function WidgetBody(props: {
           <p className="muted">
             {t("commute.leaveBy")}:{" "}
             {formatFocusTime(commute.leaveAtUTC, props.bootstrap)}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+  if (props.widget.widgetType === "finance") {
+    const summary = props.finance?.summaries[0] ?? null;
+    const bill = props.finance?.dueBills.find((row) => !row.paid) ?? null;
+    return (
+      <div>
+        {summary ? (
+          <>
+            <p>
+              {t("finance.income")}:{" "}
+              {formatMoney(
+                summary.incomeMinor,
+                summary.currency,
+                props.bootstrap.locale,
+              )}
+            </p>
+            <p>
+              {t("finance.expense")}:{" "}
+              {formatMoney(
+                summary.expenseMinor,
+                summary.currency,
+                props.bootstrap.locale,
+              )}
+            </p>
+          </>
+        ) : (
+          <p className="muted">{t("finance.empty")}</p>
+        )}
+        {bill ? (
+          <p className="muted">
+            {t("finance.due")}: <bdi>{bill.bill.title}</bdi>
           </p>
         ) : null}
       </div>

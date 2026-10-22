@@ -40,12 +40,21 @@ import type { FocusDeferralRecord } from "../domain/focus";
 import type { InboxItemRecord } from "../domain/inbox";
 import type { InboxDatabase } from "../application/inbox";
 import type { WeatherDatabase } from "../application/weather";
+import type { FinanceDatabase } from "../application/finance";
 import type {
   CommutePlanRecord,
   WeatherForecastRecord,
   WeatherLocationRecord,
   WeatherProfileRecord,
 } from "../domain/weather";
+import type {
+  AccountRecord,
+  BillPaymentRecord,
+  BillRecord,
+  BudgetRecord,
+  CategoryRecord,
+  FinanceTransactionRecord,
+} from "../domain/finance";
 import type {
   PluginInstanceRecord,
   PluginPackageRecord,
@@ -83,6 +92,12 @@ export const db = new Dexie("Venus-p00") as Dexie & {
   weatherLocations: EntityTable<WeatherLocationRecord, "id">;
   weatherForecasts: EntityTable<WeatherForecastRecord, "id">;
   commutePlans: EntityTable<CommutePlanRecord, "id">;
+  financeAccounts: EntityTable<AccountRecord, "id">;
+  financeCategories: EntityTable<CategoryRecord, "id">;
+  financeTransactions: EntityTable<FinanceTransactionRecord, "id">;
+  financeBudgets: EntityTable<BudgetRecord, "id">;
+  financeBills: EntityTable<BillRecord, "id">;
+  financeBillPayments: EntityTable<BillPaymentRecord, "id">;
   localBookmarks: EntityTable<LocalBookmarkRecord, "id">;
   bookmarkSnapshots: EntityTable<BookmarkSnapshotRecord, "id">;
   events: EntityTable<EventRecord, "id">;
@@ -230,6 +245,19 @@ db.version(14).stores({
   commutePlans:
     "id, profileId, eventId, occurrenceKey, [profileId+eventId], [profileId+eventId+occurrenceKey], updatedAt",
 });
+// v15 adds local Finance Snapshot records without changing any prior table.
+db.version(15).stores({
+  financeAccounts: "id, profileId, currency, archived, updatedAt",
+  financeCategories: "id, profileId, kind, archived, updatedAt",
+  financeTransactions:
+    "id, profileId, accountId, toAccountId, categoryId, date, currency, billPaymentId, updatedAt",
+  financeBudgets:
+    "id, profileId, categoryId, month, currency, [profileId+categoryId+month+currency], updatedAt",
+  financeBills:
+    "id, profileId, dueDate, status, recurrence, accountId, categoryId, updatedAt",
+  financeBillPayments:
+    "id, profileId, billId, occurrenceDate, &[billId+occurrenceDate], transactionId, updatedAt",
+});
 export const productivityDb: ProductivityDatabase = {
   notes: db.notes,
   noteDrafts: db.noteDrafts,
@@ -322,6 +350,29 @@ export const weatherDb: WeatherDatabase = {
         db.weatherLocations,
         db.weatherForecasts,
         db.commutePlans,
+      ],
+      work,
+    ),
+};
+export const financeDb: FinanceDatabase = {
+  profiles: db.profiles,
+  accounts: db.financeAccounts,
+  financeCategories: db.financeCategories,
+  financeTransactions: db.financeTransactions,
+  budgets: db.financeBudgets,
+  bills: db.financeBills,
+  billPayments: db.financeBillPayments,
+  transaction: (_mode, _tables, work) =>
+    db.transaction(
+      "rw",
+      [
+        db.profiles,
+        db.financeAccounts,
+        db.financeCategories,
+        db.financeTransactions,
+        db.financeBudgets,
+        db.financeBills,
+        db.financeBillPayments,
       ],
       work,
     ),

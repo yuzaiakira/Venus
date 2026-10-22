@@ -22,6 +22,18 @@ test("configuration has only consent-gated fixed weather hosts, no content injec
   assert.ok(source.includes("https://geocoding-api.open-meteo.com/*"));
   assert.doesNotMatch(source, /<all_urls>|http:\/\//);
 });
+test("Finance Snapshot is local-only and its export service has no unrelated data source", () => {
+  const finance = readFileSync("src/application/finance.ts", "utf8");
+  const config = readFileSync("wxt.config.ts", "utf8");
+  assert.doesNotMatch(
+    finance,
+    /\bfetch\b|https?:\/\/|weather|apiKey|preferences/,
+  );
+  assert.doesNotMatch(
+    config,
+    /finance.*host_permissions|finance.*permissions/s,
+  );
+});
 test("Chrome CI uses Playwright Chromium with a verified sandbox", () => {
   const resolver = readFileSync("scripts/chromium-executable.mjs", "utf8");
   assert.match(resolver, /chromium\.executablePath\(\)/);

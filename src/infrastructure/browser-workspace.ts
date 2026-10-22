@@ -6,6 +6,7 @@ import { createPeople } from "../application/people";
 import { createFocus } from "../application/focus";
 import { createInbox } from "../application/inbox";
 import { createWeather } from "../application/weather";
+import { createFinance } from "../application/finance";
 import { createReviews } from "../application/reviews";
 import { createProductivity } from "../application/productivity";
 import {
@@ -14,6 +15,7 @@ import {
   focusDb,
   inboxDb,
   weatherDb,
+  financeDb,
   goalsDb,
   peopleDb,
   productivityDb,
@@ -75,6 +77,12 @@ export const workspace = createWorkspace(
           db.weatherLocations.toArray(),
           db.weatherForecasts.toArray(),
           db.commutePlans.toArray(),
+          db.financeAccounts.toArray(),
+          db.financeCategories.toArray(),
+          db.financeTransactions.toArray(),
+          db.financeBudgets.toArray(),
+          db.financeBills.toArray(),
+          db.financeBillPayments.toArray(),
           db.timerSessions.toArray(),
           db.notificationOccurrences.toArray(),
           db.quietHours.toArray(),
@@ -135,6 +143,7 @@ export const weather = createWeather(weatherDb, publish, {
   provider: openMeteoCommercialProvider,
   calendar,
 });
+export const finance = createFinance(financeDb, publish);
 
 export async function requestWeatherNetwork() {
   if (!browser.permissions?.request) return "unsupported" as const;
