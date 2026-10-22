@@ -47,6 +47,10 @@ export default defineConfig({
           : "Local-only feasibility build. Firefox installation requests browser-managed Home replacement.",
       permissions: ["storage", "alarms"],
       optional_permissions: ["bookmarks", "notifications"],
+      optional_host_permissions: [
+        "https://customer-api.open-meteo.com/*",
+        "https://geocoding-api.open-meteo.com/*",
+      ],
       icons: { 48: "icons/icon-48.png", 96: "icons/icon.png" },
       ...(browser === "firefox"
         ? {

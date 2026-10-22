@@ -24,6 +24,7 @@ import type { ReviewEntry } from "../application/reviews";
 import type { PeopleWorkspace } from "../application/people";
 import type { FocusWorkspace } from "../domain/focus";
 import type { InboxWorkspace } from "../application/inbox";
+import type { WeatherWorkspace } from "../application/weather";
 import { translate, type MessageKey } from "../locales/messages";
 import { Icon, type IconName } from "./icons";
 
@@ -126,6 +127,12 @@ const chrome: Record<
     title: "widget.inboxTitle",
     sub: "widget.inboxSub",
   },
+  weather: {
+    icon: "calendar",
+    tone: "blue",
+    title: "widget.weatherTitle",
+    sub: "widget.weatherSub",
+  },
 };
 
 export function WidgetChrome(props: {
@@ -182,6 +189,7 @@ export function WidgetBody(props: {
   people: PeopleWorkspace | null;
   focus: FocusWorkspace | null;
   inbox: InboxWorkspace | null;
+  weather: WeatherWorkspace | null;
   bookmarks: LocalBookmarkRecord[];
   events: EventRecord[];
   timer: TimerRecord | null;
@@ -386,6 +394,32 @@ export function WidgetBody(props: {
         >
           {t("inbox.capture")}
         </button>
+      </div>
+    );
+  }
+  if (props.widget.widgetType === "weather") {
+    const forecast = props.weather?.forecast;
+    const commute = props.weather?.commute[0] ?? null;
+    return (
+      <div>
+        {forecast ? (
+          <>
+            <p className="hero-clock" style={{ fontSize: "1.45rem" }}>
+              {forecast.current.temperatureC}°C
+            </p>
+            {props.weather?.stale ? (
+              <p className="muted">{t("weather.stale")}</p>
+            ) : null}
+          </>
+        ) : (
+          <p className="muted">{t("weather.setupWidget")}</p>
+        )}
+        {commute?.leaveAtUTC ? (
+          <p className="muted">
+            {t("commute.leaveBy")}:{" "}
+            {formatFocusTime(commute.leaveAtUTC, props.bootstrap)}
+          </p>
+        ) : null}
       </div>
     );
   }

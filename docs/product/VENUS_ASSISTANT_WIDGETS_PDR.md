@@ -47,7 +47,7 @@ equivalent transactional service operation.
 | AI Inbox            | Triage incoming material            | Review queue, classify to task/note/event, confidence/explanation, edit before save, reject/undo   | Local rules first; no remote AI without explicit opt-in           | 🟡 Implementation verified; browser acceptance pending |
 | Habit Tracker       | Maintain routines                   | Daily/weekly habits, check-in, streak, schedule, missed state, history and reminder integration    | Local habit/check-in records                                      | 🟡 Implementation verified; browser acceptance pending |
 | Goals & Progress    | Connect work to outcomes            | Goals, time frame, measurable progress, linked tasks/habits, milestones, weekly review             | Local goal, milestone and relation records                        | 🟡 Implementation verified; browser acceptance pending |
-| Weather & Commute   | Prepare for the next commitment     | Location consent, forecast, event travel buffer, refresh time, graceful unavailable state          | Location/network are opt-in; cache minimally                      | ⬜ Planned                                             |
+| Weather & Commute   | Prepare for the next commitment     | Location consent, forecast, event travel buffer, refresh time, graceful unavailable state          | Location/network are opt-in; cache minimally                      | 🟡 Implementation verified; browser acceptance pending |
 | Focus Coach         | Protect usable focus time           | Free-time suggestions, start timer, defer/snooze, explain conflicts, never auto-edit calendar      | Reads local tasks/events/timer; recommendations local first       | 🟡 Implementation verified; browser acceptance pending |
 | People & Follow-ups | Remember relationships and promises | People, next follow-up, notes, contact method, snooze/done, due reminders                          | Local people/follow-up records; no address-book access by default | 🟡 Implementation verified; browser acceptance pending |
 | Finance Snapshot    | See commitments and budget          | Manual accounts/categories, monthly budget, upcoming bills, totals, period selector, export/delete | Local financial records; no banking connection by default         | ⬜ Planned                                             |
@@ -68,8 +68,7 @@ equivalent transactional service operation.
    verified; browser acceptance pending.
 9. **AI Inbox** — local triage queue; remote provider only after an explicit
    product decision and consent design. 🟡 Implementation verified; browser acceptance pending.
-10. **Weather & Commute** — only after a documented provider, location and
-    network-consent design. ⬜
+10. **Weather & Commute** — provider, location and network-consent design. 🟡 Implementation verified; browser acceptance pending.
 11. **Finance Snapshot** — manual-first ledger, budget and export/delete
     workflows.
 
@@ -228,8 +227,38 @@ gate while this cloud environment cannot launch a supported browser.
   RTL/LTR interface, Quick Capture affordance and destination links require
   official Firefox and secure Chromium extension exercises.
 - **Release readiness:** implementation is verified; browser acceptance remains
-  open. The next independent PDR delivery milestone is **Weather & Commute**,
-  which requires a documented provider, location and network-consent design.
+  open.
+
+## Weather & Commute verification status — 2026-10-21
+
+- **Provider and privacy design:** documented in
+  `docs/product/WEATHER_PROVIDER_AND_PRIVACY_DESIGN.md`. The fixed, replaceable
+  Open-Meteo commercial adapter requires a user-supplied commercial credential,
+  terms acknowledgement and explicit optional-host permission. It never calls
+  the public free endpoint. The only optional origins are the commercial
+  forecast and Open-Meteo geocoding HTTPS endpoints; no dynamic host, proxy,
+  IP geolocation or background request is used.
+- **Implementation and automated tests:** verified. Dexie v14 adds
+  profile-owned consent, selected-location, minimal forecast-cache and commute
+  plan records. The v13 → v14 test retains Inbox, Focus, profile, task, note
+  and widget records. Tests cover zero calls before consent, city selection,
+  cache throttling/cleanup, invalid and unavailable provider responses,
+  profile isolation, revision conflicts, database reopen and a DST leave-by
+  calculation. Revocation clears credentials/cache and prevents more requests.
+- **PDR widget acceptance:** implemented. The opt-in singleton dashboard card
+  is available through **Customize → Add widget**, preserves layouts and opens
+  the full module. The screen supports setup, manual city lookup, a separate
+  device-location action, forecast/stale/offline/error states, attribution,
+  refresh, consent revocation and local commute plans. Commute calculations are
+  visibly labeled as user-entered travel estimates; Venus never changes a
+  calendar event and does not claim traffic-aware routing.
+- **Real-browser acceptance:** pending. The cloud environment cannot launch a
+  supported Firefox or securely sandboxed Chromium. Consent prompts, RTL/mobile
+  layout, optional host-permission revocation and actual provider responses need
+  official Firefox and secure Chromium extension exercises. OS location consent
+  is also separate from browser/API test success.
+- **Release readiness:** implementation is verified; browser acceptance remains
+  open. The next independent PDR delivery milestone is **Finance Snapshot**.
 
 ## Non-goals for this delivery
 

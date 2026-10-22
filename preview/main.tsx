@@ -5,6 +5,7 @@ import {
   calendar,
   focus,
   inbox,
+  weather,
   goals,
   plugins,
   people,
@@ -28,6 +29,7 @@ createRoot(root).render(
     people={people}
     focus={focus}
     inbox={inbox}
+    weather={weather}
     plugins={plugins}
     online={navigator.onLine}
   />,

@@ -39,6 +39,13 @@ import type {
 import type { FocusDeferralRecord } from "../domain/focus";
 import type { InboxItemRecord } from "../domain/inbox";
 import type { InboxDatabase } from "../application/inbox";
+import type { WeatherDatabase } from "../application/weather";
+import type {
+  CommutePlanRecord,
+  WeatherForecastRecord,
+  WeatherLocationRecord,
+  WeatherProfileRecord,
+} from "../domain/weather";
 import type {
   PluginInstanceRecord,
   PluginPackageRecord,
@@ -72,6 +79,10 @@ export const db = new Dexie("Venus-p00") as Dexie & {
   interactions: EntityTable<InteractionRecord, "id">;
   focusDeferrals: EntityTable<FocusDeferralRecord, "id">;
   inboxItems: EntityTable<InboxItemRecord, "id">;
+  weatherProfiles: EntityTable<WeatherProfileRecord, "id">;
+  weatherLocations: EntityTable<WeatherLocationRecord, "id">;
+  weatherForecasts: EntityTable<WeatherForecastRecord, "id">;
+  commutePlans: EntityTable<CommutePlanRecord, "id">;
   localBookmarks: EntityTable<LocalBookmarkRecord, "id">;
   bookmarkSnapshots: EntityTable<BookmarkSnapshotRecord, "id">;
   events: EntityTable<EventRecord, "id">;
@@ -210,6 +221,15 @@ db.version(12).stores({
 db.version(13).stores({
   inboxItems: "id, profileId, status, selectedKind, updatedAt",
 });
+// v14 adds local Weather & Commute records. The forecast cache and location
+// are profile-owned; no existing calendar, Inbox or workspace data is changed.
+db.version(14).stores({
+  weatherProfiles: "id, profileId, &[profileId+provider], updatedAt",
+  weatherLocations: "id, profileId, updatedAt",
+  weatherForecasts: "id, profileId, locationId, expiresAt, fetchedAt",
+  commutePlans:
+    "id, profileId, eventId, occurrenceKey, [profileId+eventId], [profileId+eventId+occurrenceKey], updatedAt",
+});
 export const productivityDb: ProductivityDatabase = {
   notes: db.notes,
   noteDrafts: db.noteDrafts,
@@ -286,6 +306,25 @@ export const inboxDb: InboxDatabase = {
   inboxItems: db.inboxItems,
   transaction: (_mode, _tables, work) =>
     db.transaction("rw", [db.profiles, db.inboxItems], work),
+};
+export const weatherDb: WeatherDatabase = {
+  profiles: db.profiles,
+  weatherProfiles: db.weatherProfiles,
+  weatherLocations: db.weatherLocations,
+  weatherForecasts: db.weatherForecasts,
+  commutePlans: db.commutePlans,
+  transaction: (_mode, _tables, work) =>
+    db.transaction(
+      "rw",
+      [
+        db.profiles,
+        db.weatherProfiles,
+        db.weatherLocations,
+        db.weatherForecasts,
+        db.commutePlans,
+      ],
+      work,
+    ),
 };
 export const goalsDb: GoalsDatabase = {
   profiles: db.profiles,

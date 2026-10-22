@@ -3,13 +3,12 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
-test("P00 configuration has no host access, content injection or unsafe CSP", () => {
+test("configuration has only consent-gated fixed weather hosts, no content injection or unsafe CSP", () => {
   const source = readFileSync("wxt.config.ts", "utf8");
   for (const token of [
     "<all_urls>",
     "unsafe-eval",
     "unsafe-inline",
-    "host_permissions",
     "content_scripts",
   ])
     assert.ok(!source.includes(token), token);
@@ -18,6 +17,10 @@ test("P00 configuration has no host access, content injection or unsafe CSP", ()
       source,
     ),
   );
+  assert.ok(source.includes("optional_host_permissions"));
+  assert.ok(source.includes("https://customer-api.open-meteo.com/*"));
+  assert.ok(source.includes("https://geocoding-api.open-meteo.com/*"));
+  assert.doesNotMatch(source, /<all_urls>|http:\/\//);
 });
 test("Chrome CI uses Playwright Chromium with a verified sandbox", () => {
   const resolver = readFileSync("scripts/chromium-executable.mjs", "utf8");

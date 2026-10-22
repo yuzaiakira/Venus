@@ -664,6 +664,77 @@ export const en = {
   "focus.reason.focusRank": "Marked for focus",
   "focus.reason.highPriority": "High priority",
   "focus.reason.open": "Open task",
+  "nav.weather": "Weather & commute",
+  "widget.weatherTitle": "Weather & commute",
+  "widget.weatherSub": "Forecast and leave-by plans",
+  "weather.heading": "Weather & commute",
+  "weather.intro":
+    "Use a licensed provider only after you choose a location and explicitly connect it.",
+  "weather.offline":
+    "You are offline. Cached weather is marked stale when it expires; commute estimates still work locally.",
+  "weather.loading": "Updating Weather & Commute…",
+  "weather.connect": "Connect weather provider",
+  "weather.license":
+    "Venus uses Open-Meteo only with your commercial subscription and explicit provider consent.",
+  "weather.acceptTerms":
+    "I have the right to use this commercial provider credential and accept its attribution terms.",
+  "weather.apiKey": "Commercial API key",
+  "weather.noAutoRequest":
+    "Venus does not request location or send a network request until you choose this action.",
+  "weather.connected": "Weather provider connected on this device.",
+  "weather.location": "Selected location",
+  "weather.noLocation":
+    "Choose a city or use device location after connecting.",
+  "weather.city": "City",
+  "weather.search": "Find city",
+  "weather.searchResults": "Location results",
+  "weather.useDevice": "Use device location",
+  "weather.clearLocation": "Clear location",
+  "weather.locationDenied":
+    "Device location was not shared. You can still search for a city.",
+  "weather.locationUnavailable":
+    "This browser cannot provide device location. You can still search for a city.",
+  "weather.now": "Forecast",
+  "weather.updated": "Updated",
+  "weather.stale": "Cached forecast — refresh when available",
+  "weather.refresh": "Refresh forecast",
+  "weather.refreshed": "Forecast refreshed on this device.",
+  "weather.noForecast":
+    "Choose a location, then refresh to retrieve a forecast.",
+  "weather.wind": "Wind",
+  "weather.precipitation": "Precipitation",
+  "weather.condition.clear": "Clear",
+  "weather.condition.cloudy": "Cloudy",
+  "weather.condition.rain": "Rain",
+  "weather.condition.snow": "Snow",
+  "weather.attribution": "Weather data:",
+  "weather.privacy": "Privacy and connection",
+  "weather.revoke": "Revoke weather connection",
+  "weather.revokeHint":
+    "This removes the provider permission where supported, the local credential, and cached forecast data. Your commute plans stay local.",
+  "weather.setupWidget":
+    "Connect a licensed weather provider to show a forecast.",
+  "weather.saved": "Saved on this device.",
+  "weather.failed":
+    "This weather change could not be completed. Existing local data was not replaced.",
+  "commute.heading": "Commute preparation",
+  "commute.intro":
+    "Travel time is your estimate, not live traffic. Venus never edits your calendar.",
+  "commute.empty": "No upcoming timed calendar commitments are available.",
+  "commute.commitment": "Upcoming commitment",
+  "commute.destination": "Destination label (optional)",
+  "commute.travel": "Travel estimate (minutes)",
+  "commute.prepare": "Preparation buffer (minutes)",
+  "commute.save": "Save leave-by plan",
+  "commute.edit": "Edit plan",
+  "commute.leaving": "Leave by",
+  "commute.leaveBy": "Next leave-by",
+  "commute.past": "This leave-by time has passed.",
+  "commute.estimate":
+    "Your estimate: {travel} minutes travel + {prepare} minutes preparation.",
+  "commute.eventUnavailable":
+    "This calendar commitment is unavailable or changed.",
+  "commute.remove": "Remove plan",
   "nav.inbox": "AI Inbox",
   "widget.inboxTitle": "AI Inbox",
   "widget.inboxSub": "Review before it is saved",
@@ -1381,6 +1452,76 @@ export const fa: Record<MessageKey, string> = {
   "focus.reason.focusRank": "نشانه‌گذاری‌شده برای تمرکز",
   "focus.reason.highPriority": "اولویت بالا",
   "focus.reason.open": "کار باز",
+  "nav.weather": "هوا و رفت‌وآمد",
+  "widget.weatherTitle": "هوا و رفت‌وآمد",
+  "widget.weatherSub": "پیش‌بینی و زمان حرکت",
+  "weather.heading": "هوا و رفت‌وآمد",
+  "weather.intro":
+    "فقط پس از انتخاب مکان و اتصال صریح، از ارائه‌دهنده دارای مجوز استفاده کنید.",
+  "weather.offline":
+    "آفلاین هستید. دادهٔ منقضی‌شده کهنه نشان داده می‌شود؛ برآورد رفت‌وآمد محلی همچنان کار می‌کند.",
+  "weather.loading": "در حال به‌روزرسانی هوا و رفت‌وآمد…",
+  "weather.connect": "اتصال ارائه‌دهنده هوا",
+  "weather.license":
+    "ونوس فقط با اشتراک تجاری شما و رضایت صریح، از Open-Meteo استفاده می‌کند.",
+  "weather.acceptTerms":
+    "حق استفاده از این اعتبار تجاری را دارم و شرایط انتساب ارائه‌دهنده را می‌پذیرم.",
+  "weather.apiKey": "کلید API تجاری",
+  "weather.noAutoRequest":
+    "ونوس تا وقتی خودتان این عمل را انتخاب نکنید، موقعیت درخواست نمی‌کند و درخواست شبکه نمی‌فرستد.",
+  "weather.connected": "ارائه‌دهنده هوا روی این دستگاه متصل شد.",
+  "weather.location": "مکان انتخاب‌شده",
+  "weather.noLocation":
+    "پس از اتصال، شهر را انتخاب کنید یا از موقعیت دستگاه استفاده کنید.",
+  "weather.city": "شهر",
+  "weather.search": "یافتن شهر",
+  "weather.searchResults": "نتایج مکان",
+  "weather.useDevice": "استفاده از موقعیت دستگاه",
+  "weather.clearLocation": "پاک کردن مکان",
+  "weather.locationDenied":
+    "موقعیت دستگاه به اشتراک گذاشته نشد. همچنان می‌توانید شهر را جست‌وجو کنید.",
+  "weather.locationUnavailable":
+    "این مرورگر موقعیت دستگاه را ارائه نمی‌کند. همچنان می‌توانید شهر را جست‌وجو کنید.",
+  "weather.now": "پیش‌بینی",
+  "weather.updated": "به‌روزرسانی",
+  "weather.stale": "پیش‌بینی ذخیره‌شده — هنگام دسترسی تازه‌سازی کنید",
+  "weather.refresh": "تازه‌سازی پیش‌بینی",
+  "weather.refreshed": "پیش‌بینی روی این دستگاه تازه شد.",
+  "weather.noForecast":
+    "مکانی انتخاب کنید و سپس برای دریافت پیش‌بینی تازه‌سازی کنید.",
+  "weather.wind": "باد",
+  "weather.precipitation": "بارش",
+  "weather.condition.clear": "صاف",
+  "weather.condition.cloudy": "ابری",
+  "weather.condition.rain": "بارانی",
+  "weather.condition.snow": "برفی",
+  "weather.attribution": "دادهٔ هوا:",
+  "weather.privacy": "حریم خصوصی و اتصال",
+  "weather.revoke": "لغو اتصال هوا",
+  "weather.revokeHint":
+    "این کار در صورت پشتیبانی مجوز ارائه‌دهنده، اعتبار محلی و دادهٔ ذخیره‌شدهٔ هوا را حذف می‌کند. برنامه‌های رفت‌وآمد محلی می‌مانند.",
+  "weather.setupWidget":
+    "برای نمایش پیش‌بینی، یک ارائه‌دهنده دارای مجوز را متصل کنید.",
+  "weather.saved": "روی این دستگاه ذخیره شد.",
+  "weather.failed":
+    "این تغییر هوا کامل نشد. داده‌های محلی موجود جایگزین نشدند.",
+  "commute.heading": "آماده‌سازی رفت‌وآمد",
+  "commute.intro":
+    "زمان سفر برآورد شماست، نه ترافیک زنده. ونوس هرگز تقویم را تغییر نمی‌دهد.",
+  "commute.empty": "تعهد زمان‌دار آینده‌ای در تقویم در دسترس نیست.",
+  "commute.commitment": "تعهد آینده",
+  "commute.destination": "برچسب مقصد (اختیاری)",
+  "commute.travel": "برآورد سفر (دقیقه)",
+  "commute.prepare": "زمان آماده‌سازی (دقیقه)",
+  "commute.save": "ذخیره برنامه زمان حرکت",
+  "commute.edit": "ویرایش برنامه",
+  "commute.leaving": "زمان حرکت",
+  "commute.leaveBy": "حرکت بعدی",
+  "commute.past": "این زمان حرکت گذشته است.",
+  "commute.estimate":
+    "برآورد شما: {travel} دقیقه سفر + {prepare} دقیقه آماده‌سازی.",
+  "commute.eventUnavailable": "این تعهد تقویم در دسترس نیست یا تغییر کرده است.",
+  "commute.remove": "حذف برنامه",
   "nav.inbox": "صندوق هوشمند",
   "widget.inboxTitle": "صندوق هوشمند",
   "widget.inboxSub": "پیش از ذخیره بررسی کنید",

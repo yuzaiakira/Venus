@@ -14,6 +14,10 @@ for (const target of ["firefox", "chrome"]) {
     "bookmarks",
     "notifications",
   ]);
+  assert.deepEqual([...manifest.optional_host_permissions].sort(), [
+    "https://customer-api.open-meteo.com/*",
+    "https://geocoding-api.open-meteo.com/*",
+  ]);
   assert.ok(
     !manifest.host_permissions?.length && !manifest.content_scripts?.length,
   );

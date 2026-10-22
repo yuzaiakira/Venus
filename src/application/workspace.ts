@@ -295,6 +295,10 @@ export function createWorkspace(
         db.interactions,
         db.focusDeferrals,
         db.inboxItems,
+        db.weatherProfiles,
+        db.weatherLocations,
+        db.weatherForecasts,
+        db.commutePlans,
         db.reminderRules,
         db.notificationOccurrences,
       ],
@@ -349,6 +353,10 @@ export function createWorkspace(
         for (const person of people) await db.people.delete(person.id);
         await db.focusDeferrals.where("profileId").equals(id).delete();
         await db.inboxItems.where("profileId").equals(id).delete();
+        await db.weatherProfiles.where("profileId").equals(id).delete();
+        await db.weatherLocations.where("profileId").equals(id).delete();
+        await db.weatherForecasts.where("profileId").equals(id).delete();
+        await db.commutePlans.where("profileId").equals(id).delete();
         await db.profiles.delete(id);
         if (!fallback) {
           fallback = {

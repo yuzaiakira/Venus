@@ -31,6 +31,7 @@ export const widgetTypes = [
   "people",
   "focus",
   "inbox",
+  "weather",
 ] as const;
 export const sharedKinds = ["note", "task", "event", "bookmark"] as const;
 export const allowedMime = ["image/png", "image/jpeg", "image/webp"] as const;
@@ -70,6 +71,7 @@ export const ModuleFlagsSchema = z
     people: z.boolean(),
     focus: z.boolean(),
     inbox: z.boolean(),
+    weather: z.boolean(),
   })
   .strict();
 export const BootstrapSchema = z
@@ -175,6 +177,8 @@ export const defaultModules: Bootstrap["modules"] = {
   focus: true,
   // AI Inbox is opt-in and never changes an existing saved dashboard.
   inbox: true,
+  // Weather & Commute is opt-in and never changes a saved dashboard.
+  weather: true,
 };
 
 export function defaultBootstrap(timeZone = "UTC"): Bootstrap {

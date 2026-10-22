@@ -38,6 +38,7 @@ import type { Focus } from "../application/focus";
 import type { FocusWorkspace } from "../domain/focus";
 import type { Inbox } from "../application/inbox";
 import type { InboxWorkspace } from "../application/inbox";
+import type { Weather, WeatherWorkspace } from "../application/weather";
 import type { PluginPlatform } from "../application/plugins";
 import type {
   EventRecord,
@@ -56,6 +57,7 @@ import { ReviewsScreen } from "./reviews";
 import { PeopleScreen } from "./people";
 import { FocusScreen } from "./focus";
 import { InboxScreen } from "./inbox";
+import { WeatherScreen } from "./weather";
 import { PluginStudio, PluginWidget } from "./plugin-studio";
 import { SettingsScreen } from "./settings";
 import { Icon } from "./icons";
@@ -77,6 +79,7 @@ export function DashboardScreen(props: {
   people: People;
   focus: Focus;
   inbox: Inbox;
+  weather: Weather;
   plugins: PluginPlatform;
   online: boolean;
 }) {
@@ -119,6 +122,7 @@ export function DashboardScreen(props: {
   const [peopleData, setPeopleData] = useState<PeopleWorkspace | null>(null);
   const [focusData, setFocusData] = useState<FocusWorkspace | null>(null);
   const [inboxData, setInboxData] = useState<InboxWorkspace | null>(null);
+  const [weatherData, setWeatherData] = useState<WeatherWorkspace | null>(null);
   const [inboxCapture, setInboxCapture] = useState(0);
   const [view, setView] = useState<
     | "home"
@@ -134,6 +138,7 @@ export function DashboardScreen(props: {
     | "people"
     | "focus"
     | "inbox"
+    | "weather"
   >("home");
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [reminders, setReminders] = useState<NotificationRecord[]>([]);
@@ -186,6 +191,7 @@ export function DashboardScreen(props: {
         peopleContent,
         focusContent,
         inboxContent,
+        weatherContent,
       ] = await Promise.all([
         props.goals.load(next.bootstrap.selectedProfileId),
         props.reviews.load(next.bootstrap.selectedProfileId, today),
@@ -195,6 +201,7 @@ export function DashboardScreen(props: {
           next.bootstrap.timeZone,
         ),
         props.inbox.load(next.bootstrap.selectedProfileId),
+        props.weather.load(next.bootstrap.selectedProfileId),
       ]);
       if (sequence !== loadSequence.current) return;
       setSnapshot(next);
@@ -204,6 +211,7 @@ export function DashboardScreen(props: {
       setPeopleData(peopleContent);
       setFocusData(focusContent);
       setInboxData(inboxContent);
+      setWeatherData(weatherContent);
       setEvents(schedule.events);
       setReminders(schedule.notifications);
       setQuiet(schedule.quietHours);
@@ -228,6 +236,7 @@ export function DashboardScreen(props: {
     props.people,
     props.focus,
     props.inbox,
+    props.weather,
   ]);
   async function completeOnboarding() {
     const bootstrap = await props.workspace.updatePreferences({
@@ -503,6 +512,11 @@ export function DashboardScreen(props: {
       label: t("nav.focus"),
     },
     { id: "inbox" as const, icon: "note" as const, label: t("nav.inbox") },
+    {
+      id: "weather" as const,
+      icon: "calendar" as const,
+      label: t("nav.weather"),
+    },
     {
       id: "calendar" as const,
       icon: "calendar" as const,
@@ -989,6 +1003,29 @@ export function DashboardScreen(props: {
                 onOpenEvent={() => setView("calendar")}
               />
             ) : null}
+            {view === "weather" && weatherData ? (
+              <WeatherScreen
+                profileId={profile.id}
+                data={weatherData}
+                weather={props.weather}
+                locale={snapshot.bootstrap.locale}
+                timeZone={snapshot.bootstrap.timeZone}
+                online={online}
+                onChanged={reload}
+                requestNetwork={async () => {
+                  const { requestWeatherNetwork } = await import(
+                    "../infrastructure/browser-workspace"
+                  );
+                  return requestWeatherNetwork();
+                }}
+                revokeNetwork={async () => {
+                  const { revokeWeatherNetwork } = await import(
+                    "../infrastructure/browser-workspace"
+                  );
+                  return revokeWeatherNetwork();
+                }}
+              />
+            ) : null}
             {view === "home" ? (
               <>
                 <section className="hero card-glass" aria-label={t("nav.home")}>
@@ -1092,7 +1129,8 @@ export function DashboardScreen(props: {
             view !== "reviews" &&
             view !== "people" &&
             view !== "focus" &&
-            view !== "inbox" ? (
+            view !== "inbox" &&
+            view !== "weather" ? (
               <LibraryScreen
                 view={view}
                 selectedNoteId={selectedNoteId}
@@ -1148,7 +1186,9 @@ export function DashboardScreen(props: {
                                         ? () => setView("focus")
                                         : widget.widgetType === "inbox"
                                           ? () => setView("inbox")
-                                          : undefined;
+                                          : widget.widgetType === "weather"
+                                            ? () => setView("weather")
+                                            : undefined;
                     return (
                       <article
                         key={widget.id}
@@ -1239,6 +1279,7 @@ export function DashboardScreen(props: {
                                 people={peopleData}
                                 focus={focusData}
                                 inbox={inboxData}
+                                weather={weatherData}
                                 bookmarks={library?.bookmarks ?? []}
                                 events={events}
                                 timer={activeTimer}
@@ -1721,6 +1762,7 @@ function widgetLabel(type: WidgetType, t: (key: MessageKey) => string) {
     people: "widget.peopleTitle",
     focus: "widget.focusCoachTitle",
     inbox: "widget.inboxTitle",
+    weather: "widget.weatherTitle",
   };
   return t(labels[type]);
 }

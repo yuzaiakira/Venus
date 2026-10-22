@@ -5,6 +5,7 @@ import { createGoals } from "../application/goals";
 import { createPeople } from "../application/people";
 import { createFocus } from "../application/focus";
 import { createInbox } from "../application/inbox";
+import { createWeather } from "../application/weather";
 import { createReviews } from "../application/reviews";
 import { createProductivity } from "../application/productivity";
 import {
@@ -12,6 +13,7 @@ import {
   db,
   focusDb,
   inboxDb,
+  weatherDb,
   goalsDb,
   peopleDb,
   productivityDb,
@@ -25,6 +27,10 @@ import {
 import type { PermissionOutcome } from "../domain/commands";
 import { createPluginPlatform } from "../application/plugins";
 import { preferences } from "./browser";
+import {
+  openMeteoCommercialProvider,
+  weatherHostOrigins,
+} from "./weather-provider";
 
 const channel =
   typeof BroadcastChannel === "undefined"
@@ -65,6 +71,10 @@ export const workspace = createWorkspace(
           db.interactions.toArray(),
           db.focusDeferrals.toArray(),
           db.inboxItems.toArray(),
+          db.weatherProfiles.toArray(),
+          db.weatherLocations.toArray(),
+          db.weatherForecasts.toArray(),
+          db.commutePlans.toArray(),
           db.timerSessions.toArray(),
           db.notificationOccurrences.toArray(),
           db.quietHours.toArray(),
@@ -121,6 +131,35 @@ export const people = createPeople(peopleDb, publish, {
 });
 export const focus = createFocus(focusDb, publish);
 export const inbox = createInbox(inboxDb, publish, { productivity, calendar });
+export const weather = createWeather(weatherDb, publish, {
+  provider: openMeteoCommercialProvider,
+  calendar,
+});
+
+export async function requestWeatherNetwork() {
+  if (!browser.permissions?.request) return "unsupported" as const;
+  try {
+    return (await browser.permissions.request({
+      origins: [...weatherHostOrigins],
+    }))
+      ? "granted"
+      : "denied";
+  } catch {
+    return "failed" as const;
+  }
+}
+export async function revokeWeatherNetwork() {
+  if (!browser.permissions?.remove) return "unsupported" as const;
+  try {
+    return (await browser.permissions.remove({
+      origins: [...weatherHostOrigins],
+    }))
+      ? "revoked"
+      : "failed";
+  } catch {
+    return "failed" as const;
+  }
+}
 
 export async function requestOptional(
   name: "bookmarks" | "notifications",
