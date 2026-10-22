@@ -3,6 +3,7 @@ import type { Finance, FinanceWorkspace } from "../application/finance";
 import {
   formatMoney,
   parseMinor,
+  currencyPrecision,
   type AccountRecord,
   type FinanceKind,
 } from "../domain/finance";
@@ -60,6 +61,8 @@ export function FinanceScreen(props: {
   const [description, setDescription] = useState("");
   const [budgetCategory, setBudgetCategory] = useState("");
   const [budgetAmount, setBudgetAmount] = useState("");
+  const [budgetCurrency, setBudgetCurrency] = useState("USD");
+  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [billTitle, setBillTitle] = useState("");
   const [billAmount, setBillAmount] = useState("");
   const [billDate, setBillDate] = useState(today());
@@ -67,8 +70,14 @@ export function FinanceScreen(props: {
     "none" | "monthly" | "yearly"
   >("monthly");
   const [billAccount, setBillAccount] = useState("");
+  const [editingBillId, setEditingBillId] = useState<string | null>(null);
   const accounts = props.data.accounts.filter((row) => !row.archived);
   const categories = props.data.categories.filter((row) => !row.archived);
+  const editingBudget =
+    props.data.budgets.find((row) => row.id === editingBudgetId) ?? null;
+  const editingBill =
+    props.data.bills.find((row) => row.id === editingBillId) ?? null;
+  const currencies = [...new Set(accounts.map((row) => row.currency))];
   const balances = useMemo(
     () => new Map(accounts.map((row) => [row.id, row.openingBalanceMinor])),
     [accounts],
@@ -535,6 +544,20 @@ export function FinanceScreen(props: {
               onChange={(e) => setBudgetAmount(e.target.value)}
             />
           </label>
+          <label>
+            {t("finance.currency")}
+            <select
+              className="select"
+              value={budgetCurrency}
+              onChange={(event) => setBudgetCurrency(event.currentTarget.value)}
+            >
+              {currencies.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <button
           className="btn primary"
@@ -543,14 +566,17 @@ export function FinanceScreen(props: {
           onClick={() =>
             void run(async () => {
               const cat = categories.find((row) => row.id === budgetCategory);
-              const acc = accounts[0];
-              if (!cat || !acc) throw new Error();
+              if (!cat) throw new Error();
               await props.finance.saveBudget(props.profileId, {
+                ...(editingBudget
+                  ? { id: editingBudget.id, expected: editingBudget.revision }
+                  : {}),
                 categoryId: cat.id,
                 month: props.data.month,
-                currency: acc.currency,
-                limitMinor: parseMinor(budgetAmount, acc.currency),
+                currency: budgetCurrency,
+                limitMinor: parseMinor(budgetAmount, budgetCurrency),
               });
+              setEditingBudgetId(null);
             })
           }
         >
@@ -580,6 +606,23 @@ export function FinanceScreen(props: {
                 {spent > row.limitMinor ? (
                   <p className="error">{t("finance.overBudget")}</p>
                 ) : null}
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setBudgetCategory(row.categoryId);
+                    setBudgetCurrency(row.currency);
+                    setBudgetAmount(
+                      String(
+                        row.limitMinor / 10 ** currencyPrecision(row.currency),
+                      ),
+                    );
+                    setEditingBudgetId(row.id);
+                  }}
+                >
+                  {t("finance.edit")}
+                </button>
               </article>
             );
           })}
@@ -658,6 +701,9 @@ export function FinanceScreen(props: {
                 accounts.find((row) => row.id === billAccount) ?? accounts[0];
               if (!acc) throw new Error();
               await props.finance.saveBill(props.profileId, {
+                ...(editingBill
+                  ? { id: editingBill.id, expected: editingBill.revision }
+                  : {}),
                 title: billTitle,
                 amountMinor: parseMinor(billAmount, acc.currency),
                 currency: acc.currency,
@@ -668,6 +714,7 @@ export function FinanceScreen(props: {
               });
               setBillTitle("");
               setBillAmount("");
+              setEditingBillId(null);
             })
           }
         >
@@ -731,6 +778,26 @@ export function FinanceScreen(props: {
                 }
               >
                 {t("finance.delete")}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setBillTitle(row.bill.title);
+                  setBillAmount(
+                    String(
+                      row.bill.amountMinor /
+                        10 ** currencyPrecision(row.bill.currency),
+                    ),
+                  );
+                  setBillDate(row.bill.dueDate);
+                  setBillRecurrence(row.bill.recurrence);
+                  setBillAccount(row.bill.accountId ?? "");
+                  setEditingBillId(row.bill.id);
+                }}
+              >
+                {t("finance.edit")}
               </button>
             </article>
           ))}
