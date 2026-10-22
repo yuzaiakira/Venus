@@ -48,6 +48,10 @@ export type DueBill = {
   overdue: boolean;
   payment: BillPaymentRecord | null;
 };
+export type BudgetProgress = {
+  budgetId: string;
+  spentMinor: number;
+};
 export type FinanceWorkspace = {
   accounts: AccountRecord[];
   categories: CategoryRecord[];
@@ -56,6 +60,7 @@ export type FinanceWorkspace = {
   bills: BillRecord[];
   payments: BillPaymentRecord[];
   summaries: CurrencySummary[];
+  budgetProgress: BudgetProgress[];
   dueBills: DueBill[];
   month: string;
 };
@@ -157,37 +162,47 @@ export function createFinance(
     for (const row of ownAccounts)
       ensure(row.currency).balanceMinor += row.openingBalanceMinor;
     const originals = new Map(ownTransactions.map((row) => [row.id, row]));
+    const periodTransactions = ownTransactions.filter(
+      (row) => row.date.slice(0, 7) === month,
+    );
     for (const row of ownTransactions) {
       const sum = ensure(row.currency);
       if (row.kind === "income") {
-        sum.incomeMinor += row.amountMinor;
         sum.balanceMinor += row.amountMinor;
       } else if (row.kind === "expense") {
-        sum.expenseMinor += row.amountMinor;
         sum.balanceMinor -= row.amountMinor;
       } else if (row.kind === "transfer") {
         sum.balanceMinor -= row.amountMinor;
       } else {
         const original = originals.get(row.reversedTransactionId ?? "");
-        if (original?.kind === "income") {
-          sum.incomeMinor -= row.amountMinor;
-          sum.balanceMinor -= row.amountMinor;
-        }
-        if (original?.kind === "expense") {
-          sum.expenseMinor -= row.amountMinor;
-          sum.balanceMinor += row.amountMinor;
-        }
+        if (original?.kind === "income") sum.balanceMinor -= row.amountMinor;
+        if (original?.kind === "expense") sum.balanceMinor += row.amountMinor;
+      }
+    }
+    /**
+     * A reversal copies its original transaction date when it is created. It
+     * therefore adjusts that original accounting period rather than today.
+     * Balances remain lifetime-based; period income, expense, and budgets use
+     * the same immutable transaction-date rule.
+     */
+    for (const row of periodTransactions) {
+      const sum = ensure(row.currency);
+      if (row.kind === "income") sum.incomeMinor += row.amountMinor;
+      if (row.kind === "expense") sum.expenseMinor += row.amountMinor;
+      if (row.kind === "reversal") {
+        const original = originals.get(row.reversedTransactionId ?? "");
+        if (original?.kind === "income") sum.incomeMinor -= row.amountMinor;
+        if (original?.kind === "expense") sum.expenseMinor -= row.amountMinor;
       }
     }
     for (const row of ownTransactions.filter((row) => row.kind === "transfer"))
       ensure(row.currency).balanceMinor += row.amountMinor;
+    const budgetProgress: BudgetProgress[] = [];
     for (const row of ownBudgets) {
       const sum = ensure(row.currency);
       sum.budgetLimitMinor += row.limitMinor;
-      const spent = ownTransactions
-        .filter(
-          (tx) => tx.currency === row.currency && tx.date.startsWith(month),
-        )
+      const spent = periodTransactions
+        .filter((tx) => tx.currency === row.currency)
         .reduce((total, tx) => {
           if (tx.kind === "expense" && tx.categoryId === row.categoryId)
             return total + tx.amountMinor;
@@ -201,6 +216,7 @@ export function createFinance(
           }
           return total;
         }, 0);
+      budgetProgress.push({ budgetId: row.id, spentMinor: spent });
       sum.budgetSpentMinor += spent;
     }
     for (const sum of byCurrency.values())
@@ -237,6 +253,7 @@ export function createFinance(
       summaries: [...byCurrency.values()].sort((a, b) =>
         a.currency.localeCompare(b.currency),
       ),
+      budgetProgress,
       dueBills: dueBills.sort((a, b) =>
         a.occurrenceDate.localeCompare(b.occurrenceDate),
       ),
@@ -869,22 +886,87 @@ export function createFinance(
   }
   async function csv(profileId: string) {
     const data = await exported(profileId);
-    return [
-      "date,kind,amountMinor,currency,accountId,categoryId,description",
-      ...data.transactions.map((row) =>
-        [
-          row.date,
-          row.kind,
-          String(row.amountMinor),
-          row.currency,
-          row.accountId,
-          row.categoryId ?? "",
-          row.description,
-        ]
-          .map(escapeCsv)
-          .join(","),
-      ),
-    ].join("\n");
+    const rows = [
+      [
+        "recordType",
+        "date",
+        "kind",
+        "amountMinor",
+        "currency",
+        "accountId",
+        "categoryId",
+        "description",
+        "name",
+        "title",
+        "reference",
+      ],
+      ...data.accounts.map((row) => [
+        "account",
+        "",
+        "",
+        String(row.openingBalanceMinor),
+        row.currency,
+        row.id,
+        "",
+        "",
+        row.name,
+        "",
+        "",
+      ]),
+      ...data.categories.map((row) => [
+        "category",
+        "",
+        row.kind,
+        "",
+        "",
+        "",
+        row.id,
+        "",
+        row.name,
+        "",
+        "",
+      ]),
+      ...data.transactions.map((row) => [
+        "transaction",
+        row.date,
+        row.kind,
+        String(row.amountMinor),
+        row.currency,
+        row.accountId,
+        row.categoryId ?? "",
+        row.description,
+        "",
+        "",
+        "",
+      ]),
+      ...data.bills.map((row) => [
+        "bill",
+        row.dueDate,
+        row.recurrence,
+        String(row.amountMinor),
+        row.currency,
+        row.accountId ?? "",
+        row.categoryId ?? "",
+        "",
+        "",
+        row.title,
+        "",
+      ]),
+      ...data.payments.map((row) => [
+        "billPayment",
+        row.occurrenceDate,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        row.reference ?? "",
+      ]),
+    ];
+    return [...rows.map((row) => row.map(escapeCsv).join(","))].join("\n");
   }
   return {
     load,

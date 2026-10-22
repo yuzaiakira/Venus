@@ -131,14 +131,34 @@ export function currencyPrecision(currency: string) {
 }
 /** Reject extra precision rather than rounding a financial amount. */
 export function parseMinor(input: string, currency: string) {
+  return parseMoneyMinor(input, currency, false);
+}
+
+/**
+ * Parse an account opening balance. Unlike transaction amounts, an opening
+ * balance can be zero or represent an existing overdraft. This is deliberately
+ * separate from parseMinor(), which continues to require a positive amount.
+ */
+export function parseSignedMinor(input: string, currency: string) {
+  return parseMoneyMinor(input, currency, true);
+}
+
+function parseMoneyMinor(input: string, currency: string, signed: boolean) {
   const precision = currencyPrecision(currency);
   const value = input.trim();
-  if (!/^\d+(?:\.\d+)?$/.test(value)) throw new Error("invalid money");
-  const [whole, fraction = ""] = value.split(".");
+  const match = (
+    signed ? /^([+-]?)(\d+)(?:\.(\d+))?$/ : /^(\d+)(?:\.(\d+))?$/
+  ).exec(value);
+  if (!match) throw new Error("invalid money");
+  const sign = signed ? match[1] : "";
+  const whole = signed ? match[2]! : match[1]!;
+  const fraction = (signed ? match[3] : match[2]) ?? "";
   if (fraction.length > precision) throw new Error("unsupported precision");
   const scaled = `${whole}${fraction.padEnd(precision, "0")}`;
-  const minor = Number(scaled);
-  return moneySchema.refine((number) => number > 0).parse(minor);
+  const minor = moneySchema.parse(Number(scaled));
+  if (!signed) return moneySchema.refine((number) => number > 0).parse(minor);
+  const result = sign === "-" ? -minor : minor;
+  return accountSchema.shape.openingBalanceMinor.parse(result);
 }
 export function formatMoney(
   minor: number,
@@ -182,7 +202,16 @@ export function billOccurrence(
   if (recurrence === "monthly" && month < dueDate.slice(0, 7)) return null;
   return `${month}-${String(Math.min(dueDay, daysInMonth(year, mon))).padStart(2, "0")}`;
 }
+/**
+ * Serialize one CSV cell for spreadsheet import. Some spreadsheet programs
+ * ignore leading whitespace and Unicode format/control characters before
+ * deciding whether a cell is a formula. Prefix a literal apostrophe whenever
+ * such a prefix is followed by a formula sigil; otherwise preserve the user's
+ * text verbatim. Quotes are escaped according to RFC 4180-style CSV rules.
+ */
 export function escapeCsv(value: string) {
-  const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  const safe = /^[\p{White_Space}\p{Cc}\p{Cf}]*[=+\-@]/u.test(value)
+    ? `'${value}`
+    : value;
   return `"${safe.replaceAll('"', '""')}"`;
 }

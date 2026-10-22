@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createFinance } from "../../src/application/finance";
+import { parseSignedMinor } from "../../src/domain/finance";
 import {
   createWorkspace,
   memoryPreferences,
@@ -27,6 +28,124 @@ async function harness() {
 }
 
 describe("Finance Snapshot persistence and safety", () => {
+  it("scopes income, expenses, reversals, and budgets to the selected month while balances remain lifetime-based", async () => {
+    const { profile, finance } = await harness();
+    const account = await finance.createAccount(profile.id, {
+      name: "Main",
+      type: "bank",
+      currency: "USD",
+      openingBalanceMinor: parseSignedMinor("0", "USD"),
+    });
+    const positive = await finance.createAccount(profile.id, {
+      name: "Credit",
+      type: "card",
+      currency: "USD",
+      openingBalanceMinor: parseSignedMinor("12.34", "USD"),
+    });
+    const negative = await finance.createAccount(profile.id, {
+      name: "Overdraft",
+      type: "bank",
+      currency: "USD",
+      openingBalanceMinor: parseSignedMinor("-5.50", "USD"),
+    });
+    const income = await finance.createCategory(profile.id, {
+      name: "Pay",
+      kind: "income",
+    });
+    const expense = await finance.createCategory(profile.id, {
+      name: "Food",
+      kind: "expense",
+    });
+    await finance.createTransaction(profile.id, {
+      kind: "income",
+      amountMinor: 1000,
+      currency: "USD",
+      accountId: account.id,
+      categoryId: income.id,
+      date: "2026-09-15",
+      description: "September pay",
+    });
+    await finance.createTransaction(profile.id, {
+      kind: "income",
+      amountMinor: 2000,
+      currency: "USD",
+      accountId: account.id,
+      categoryId: income.id,
+      date: "2026-10-15",
+      description: "October pay",
+    });
+    const octoberExpense = await finance.createTransaction(profile.id, {
+      kind: "expense",
+      amountMinor: 500,
+      currency: "USD",
+      accountId: account.id,
+      categoryId: expense.id,
+      date: "2026-10-16",
+      description: "October food",
+    });
+    await finance.createTransaction(profile.id, {
+      kind: "expense",
+      amountMinor: 300,
+      currency: "USD",
+      accountId: account.id,
+      categoryId: expense.id,
+      date: "2026-11-16",
+      description: "November food",
+    });
+    await finance.saveBudget(profile.id, {
+      categoryId: expense.id,
+      month: "2026-10",
+      currency: "USD",
+      limitMinor: 1000,
+    });
+    const september = await finance.load(profile.id, "2026-09");
+    const october = await finance.load(profile.id, "2026-10");
+    const november = await finance.load(profile.id, "2026-11");
+    expect(september.summaries[0]).toMatchObject({
+      incomeMinor: 1000,
+      expenseMinor: 0,
+      balanceMinor: 2884,
+    });
+    expect(october.summaries[0]).toMatchObject({
+      incomeMinor: 2000,
+      expenseMinor: 500,
+      balanceMinor: 2884,
+      budgetSpentMinor: 500,
+    });
+    expect(november.summaries[0]).toMatchObject({
+      incomeMinor: 0,
+      expenseMinor: 300,
+      balanceMinor: 2884,
+    });
+    expect(october.budgetProgress).toEqual([
+      expect.objectContaining({ spentMinor: 500 }),
+    ]);
+    await finance.reverseTransaction(
+      profile.id,
+      octoberExpense.id,
+      octoberExpense.revision,
+    );
+    const adjustedOctober = await finance.load(profile.id, "2026-10");
+    const adjustedNovember = await finance.load(profile.id, "2026-11");
+    expect(adjustedOctober.summaries[0]).toMatchObject({
+      incomeMinor: 2000,
+      expenseMinor: 0,
+      balanceMinor: 3384,
+      budgetSpentMinor: 0,
+    });
+    expect(adjustedNovember.summaries[0]).toMatchObject({
+      incomeMinor: 0,
+      expenseMinor: 300,
+      balanceMinor: 3384,
+    });
+    expect(
+      (await finance.load(profile.id, "2026-10")).accounts
+        .map((row) => row.openingBalanceMinor)
+        .sort((a, b) => a - b),
+    ).toEqual([-550, 0, 1234]);
+    expect(positive.openingBalanceMinor).toBe(1234);
+    expect(negative.openingBalanceMinor).toBe(-550);
+  });
   it("keeps balances and monthly totals exact across income, expense, transfer, budget and reversal", async () => {
     const { profile, finance } = await harness();
     const cash = await finance.createAccount(profile.id, {
@@ -146,17 +265,17 @@ describe("Finance Snapshot persistence and safety", () => {
   it("makes bill payment idempotent, links exactly one expense, exports safely, and clears only finance data", async () => {
     const { profile, workspace, finance } = await harness();
     const account = await finance.createAccount(profile.id, {
-      name: "Bills",
+      name: " \t=Bills",
       type: "bank",
       currency: "USD",
       openingBalanceMinor: 0,
     });
     const category = await finance.createCategory(profile.id, {
-      name: "Utilities",
+      name: "\u200b@Utilities",
       kind: "expense",
     });
     const bill = await finance.saveBill(profile.id, {
-      title: "=Electric",
+      title: "\r\n-Electric",
       amountMinor: 999,
       currency: "USD",
       dueDate: "2026-01-31",
@@ -169,7 +288,7 @@ describe("Finance Snapshot persistence and safety", () => {
       bill.id,
       bill.revision,
       "2026-02-28",
-      "paid",
+      "\t=paid",
       true,
     );
     const replay = await finance.markBillPaid(
@@ -177,14 +296,28 @@ describe("Finance Snapshot persistence and safety", () => {
       bill.id,
       bill.revision,
       "2026-02-28",
-      "paid",
+      "\t=paid",
       true,
     );
     expect(replay.payment.id).toBe(first.payment.id);
     const loaded = await finance.load(profile.id, "2026-02", "2026-03-01");
     expect(loaded.payments).toHaveLength(1);
     expect(loaded.transactions).toHaveLength(1);
-    expect(await finance.csv(profile.id)).toContain("'=Electric");
+    await finance.createTransaction(profile.id, {
+      kind: "expense",
+      amountMinor: 1,
+      currency: "USD",
+      accountId: account.id,
+      categoryId: category.id,
+      date: "2026-02-28",
+      description: " \t=Manual description",
+    });
+    const csv = await finance.csv(profile.id);
+    expect(csv).toContain("'=Bills");
+    expect(csv).toContain("'\u200b@Utilities");
+    expect(csv).toContain("'-Electric");
+    expect(csv).toContain("'=paid");
+    expect(csv).toContain("'=Manual description");
     const other = await workspace.createProfile("minimal", "Other");
     const otherAccount = await finance.createAccount(other.id, {
       name: "Keep",

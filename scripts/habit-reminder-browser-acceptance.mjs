@@ -91,6 +91,51 @@ async function readHabitData(page, title) {
   );
 }
 
+async function waitForHabitCompletion(page, title) {
+  await page.waitForFunction(
+    async (habitTitle) => {
+      const request = indexedDB.open("Venus-p00");
+      return await new Promise((resolve, reject) => {
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const database = request.result;
+          const transaction = database.transaction(
+            ["habits", "notificationOccurrences"],
+            "readonly",
+          );
+          const values = { habits: [], notifications: [] };
+          for (const [store, key] of [
+            ["habits", "habits"],
+            ["notificationOccurrences", "notifications"],
+          ]) {
+            transaction.objectStore(store).openCursor().onsuccess = (event) => {
+              const cursor = event.target.result;
+              if (!cursor) return;
+              values[key].push(cursor.value);
+              cursor.continue();
+            };
+          }
+          transaction.onerror = () => reject(transaction.error);
+          transaction.oncomplete = () => {
+            const habit = values.habits.find((row) => row.title === habitTitle);
+            resolve(
+              habit?.checkIns.length === 1 &&
+                values.notifications.filter(
+                  (row) =>
+                    row.ownerId === habit.id &&
+                    row.sourceKind === "habit" &&
+                    row.internalStatus === "completed",
+                ).length === 1,
+            );
+          };
+        };
+      });
+    },
+    title,
+    { timeout: 15_000 },
+  );
+}
+
 let context;
 let page;
 
@@ -330,7 +375,9 @@ try {
     .locator("li", { hasText: savedTitle })
     .filter({ hasText: "due" });
   await notification.getByRole("button", { name: "Done", exact: true }).click();
-  await page.getByText("completed", { exact: true }).waitFor();
+  // Persistent occurrence state is the acceptance criterion. UI copy is
+  // localized and need not literally contain the English word "completed".
+  await waitForHabitCompletion(page, savedTitle);
   stored = await readHabitData(page, savedTitle);
   assert.equal(
     stored.habit.checkIns.length,

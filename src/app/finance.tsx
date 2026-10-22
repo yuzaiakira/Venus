@@ -3,6 +3,7 @@ import type { Finance, FinanceWorkspace } from "../application/finance";
 import {
   formatMoney,
   parseMinor,
+  parseSignedMinor,
   currencyPrecision,
   type AccountRecord,
   type FinanceKind,
@@ -25,12 +26,6 @@ function download(name: string, type: string, content: string) {
   link.click();
   URL.revokeObjectURL(url);
 }
-function signedMinor(value: string, currency: string) {
-  const negative = value.trim().startsWith("-");
-  const parsed = parseMinor(value.trim().replace(/^-/, "") || "0", currency);
-  return negative ? -parsed : parsed;
-}
-
 export function FinanceScreen(props: {
   profileId: string;
   data: FinanceWorkspace;
@@ -259,7 +254,7 @@ export function FinanceScreen(props: {
                 name: accountName,
                 type: accountType,
                 currency,
-                openingBalanceMinor: signedMinor(opening, currency),
+                openingBalanceMinor: parseSignedMinor(opening, currency),
               });
               setAccountName("");
             })
@@ -584,15 +579,10 @@ export function FinanceScreen(props: {
         </button>
         <div className="board-cards">
           {props.data.budgets.map((row) => {
-            const spent = props.data.transactions
-              .filter(
-                (tx) =>
-                  tx.kind === "expense" &&
-                  tx.categoryId === row.categoryId &&
-                  tx.date.startsWith(props.data.month) &&
-                  tx.currency === row.currency,
-              )
-              .reduce((a, tx) => a + tx.amountMinor, 0);
+            const spent =
+              props.data.budgetProgress.find(
+                (progress) => progress.budgetId === row.id,
+              )?.spentMinor ?? 0;
             return (
               <article className="task-card card-glass" key={row.id}>
                 <strong>

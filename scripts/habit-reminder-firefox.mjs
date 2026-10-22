@@ -63,6 +63,41 @@ async function setReactInput(driver, element, value) {
   );
 }
 
+async function visibleControl(driver, By, selector, label) {
+  return driver.wait(
+    async () => {
+      for (const candidate of await driver.findElements(By.css(selector))) {
+        if (!(await candidate.isDisplayed()) || !(await candidate.isEnabled()))
+          continue;
+        const actionable = await driver.executeScript(
+          `
+            const element = arguments[0];
+            element.scrollIntoView({ block: "center", inline: "center" });
+            const rect = element.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return false;
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            const top = document.elementFromPoint(x, y);
+            const style = getComputedStyle(element);
+            return Boolean(
+              top &&
+              element.contains(top) &&
+              style.visibility !== "hidden" &&
+              style.pointerEvents !== "none" &&
+              x >= 0 && x <= innerWidth && y >= 0 && y <= innerHeight,
+            );
+          `,
+          candidate,
+        );
+        if (actionable) return candidate;
+      }
+      return false;
+    },
+    10_000,
+    `Firefox has no visible, interactable ${label} control`,
+  );
+}
+
 // Exercises real controls in Firefox's installed, temporary extension. Database
 // access is read-only and only verifies effects caused by the UI and alarm.
 export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
@@ -74,6 +109,10 @@ export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
   };
   await mkdir(evidenceDir, { recursive: true });
   try {
+    // A desktop viewport keeps the sidebar's bottom Settings control in the
+    // viewport. The narrow viewport assertion runs separately after all
+    // desktop navigation is complete.
+    await driver.manage().window().setRect({ width: 1440, height: 900 });
     const title = "Firefox reminder habit";
     const skipSetup = await driver.findElements(
       By.xpath("//button[normalize-space()='Skip setup']"),
@@ -221,14 +260,12 @@ export async function verifyHabitReminderFirefox(driver, By, evidenceDir) {
         "Firefox Notification Center did not close before opening Settings",
       );
     }
-    const settingsControls = await driver.findElements(
-      By.css('[aria-label="Settings"]'),
+    const settings = await visibleControl(
+      driver,
+      By,
+      '.side-bottom [aria-label="Settings"]',
+      "Settings navigation",
     );
-    const settings = await (async () => {
-      for (const control of settingsControls)
-        if (await control.isDisplayed()) return control;
-      throw new Error("Firefox has no visible Settings navigation control");
-    })();
     await settings.click();
     await driver.wait(
       async () =>
