@@ -207,7 +207,8 @@ function HabitRow(props: {
     <li id={`habit-${props.habit.id}`} className="task-card card-glass">
       <strong>{props.habit.title}</strong>
       <span className="muted">
-        {props.habit.frequency} · {habitState(props.habit, props.today)} ·{" "}
+        {props.habit.frequency} ·{" "}
+        {habitState(props.habit, props.today, props.today)} ·{" "}
         {habitStreak(props.habit, props.today)} / {habitBestStreak(props.habit)}{" "}
         {props.locale === "fa" ? "روز" : "streak"}
       </span>

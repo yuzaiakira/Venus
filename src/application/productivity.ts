@@ -136,12 +136,17 @@ export function createProductivity(
     expected: number,
     patch: Partial<Pick<HabitRecord, "title" | "frequency" | "reminder">>,
   ) {
-    if (patch.reminder !== undefined) {
-      if (!updateHabitWithCalendar) throw new WorkspaceError("invalidInput");
+    // Schedule-affecting updates must use Calendar's transaction so frequency
+    // changes cancel invalid future occurrences as well as reminder edits.
+    if (
+      updateHabitWithCalendar &&
+      (patch.reminder !== undefined || patch.frequency !== undefined)
+    ) {
       const row = await updateHabitWithCalendar(id, expected, patch);
       changed(row.id, row.revision);
       return row;
     }
+    if (patch.reminder !== undefined) throw new WorkspaceError("invalidInput");
     const row = await database.transaction(
       "rw",
       [database.habits],

@@ -265,9 +265,17 @@ export function habitBestStreak(habit: HabitRecord) {
   }
   return best;
 }
-export function habitState(habit: HabitRecord, date: string) {
+/**
+ * Returns the state for a local calendar date. Callers that already resolved
+ * the user's IANA timezone must pass that same local `today` value so the UI
+ * never falls back to the device's UTC date around midnight.
+ */
+export function habitState(
+  habit: HabitRecord,
+  date: string,
+  today = new Date().toISOString().slice(0, 10),
+) {
   if (habit.checkIns.includes(date)) return "completed" as const;
-  const today = new Date().toISOString().slice(0, 10);
   if (date > today) return "upcoming" as const;
   if (habit.frequency === "weekly")
     return weekKey(date) < weekKey(today)

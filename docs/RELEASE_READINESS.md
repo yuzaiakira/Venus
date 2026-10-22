@@ -1,116 +1,69 @@
 # Venus release-readiness record
 
-**Updated:** 2026-10-22
-**Candidate baseline:** `b3345e013714e2f1e6402c810ef9cfa882704dac` plus the
-uncommitted verification fixes recorded in this change.
+**Updated:** 2026-10-23
+**Candidate baseline:** `0aa082930f0238a4a84629e8084eef2431035cee` plus the stabilization changes in this review.
 
-## Evidence status
+## Release decision
 
-| Gate                                                          | Status                                    | Evidence                                                                                                                                                    |
-| ------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Data validation, local persistence and service tests          | PASS locally                              | `npm run unit`, `npm run test:integration`                                                                                                                  |
-| Historical Dexie upgrade through v15                          | PASS locally                              | `tests/integration/migration.test.ts`, `tests/integration/finance-migration.test.ts`                                                                        |
-| Lint, types, formatting, builds, manifest and security checks | Pending this candidate's final validation | Run the commands in [Validation](#validation) after the Firefox and Chrome bundles are built.                                                               |
-| Official Firefox extension acceptance                         | BLOCKED                                   | The latest reported run, `39846211068`, recorded zero job steps. It is not browser evidence for this candidate.                                             |
-| Secure Chromium extension acceptance                          | BLOCKED                                   | The latest reported run, `39846211068`, recorded zero job steps. Chromium must start with `chromiumSandbox: true`; no `--no-sandbox` fallback is permitted. |
-| Operating-system notification display                         | NOT VERIFIED                              | Browser automation may establish extension notification API state only. A visible native operating-system notification needs a separate observation.        |
+**NO-GO.** The local implementation, migration, security, and deterministic data checks are release-reviewable. A public release still requires manual extension acceptance in official Firefox and securely sandboxed Chromium, including narrow RTL layouts and extension-notification API checks. A visible operating-system notification is a separate manual observation.
+
+GitHub Actions is temporarily disabled/deferred by the repository owner for financial reasons and is not part of the current validation workflow.
+
+## Validation environment: ChatGPT Codex Cloud
+
+The current workspace provides Node.js 24.19.0, npm 11.9.0, the checked-out repository, local npm dependencies, TypeScript, Vitest, WXT and the build tools. It does not provide an official Firefox binary. A system Chromium 154.0.8037.57 is present, but the exact Playwright Chromium executable required by the secure extension scripts is absent. The scripts deliberately refuse to fall back to that system binary because it could load Chrome's New Tab page instead of the unpacked Venus extension.
+
+No browser download or sandbox workaround was attempted. Browser acceptance is therefore **NOT EXECUTED** in this environment. In particular, no `--no-sandbox` launch, AppArmor change, or synthetic native-notification claim was used.
+
+| Gate                                             | Status                    | Local evidence                                                                                   |
+| ------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------ |
+| Lint and TypeScript                              | PASS                       | `npm run lint`, `npm run typecheck`                                                              |
+| Unit data/domain tests                           | PASS — 14 files, 71 tests | `npm run unit`                                                                                   |
+| IndexedDB integration and cross-widget workflows | PASS — 17 files, 84 tests | `npm run test:integration`                                                                       |
+| Formatting, both builds and manifests            | PASS                       | `npm run format:check`, both WXT builds, `npm run inspect:manifests`                             |
+| Bundle security regression tests                 | PASS — 10 tests            | `npm run test:security` after both builds                                                        |
+| Official Firefox extension acceptance            | BLOCKED (not executed)     | Official Firefox is unavailable in Codex Cloud                                                   |
+| Secure Playwright Chromium extension acceptance  | BLOCKED (not executed)     | Required Playwright Chromium executable is unavailable; `chromiumSandbox: true` remains required |
+| Operating-system notification display            | NOT VERIFIED              | Requires an observer on the target desktop/OS                                                    |
+
+The complete, reproducible local command order is in [Local validation commands](#local-validation-commands). The manual, browser-specific scenarios and evidence requirements are in [Manual browser acceptance](MANUAL_BROWSER_ACCEPTANCE.md).
+
+## Stabilization review
+
+- Finance monthly income, expenses, budgets and reversal adjustments use the selected transaction month; account balances remain lifetime totals. Opening balances accept zero or signed minor units, while transaction amounts remain strictly positive. CSV exports protect spreadsheet formula sigils after whitespace, control and Unicode-format prefixes.
+- Dexie v15 remains additive. Migration fixtures retain historical profile, widget, note, task, calendar, habit, reminder, goal, review, people, focus, Inbox, Weather and commute records before Finance records are created and reopened.
+- Habit reminder reconciliation now cancels every invalid future occurrence when a habit's frequency changes, including snoozed descendants. A normal reconciliation retains a still-valid snoozed child rather than cancelling it as an unscheduled duplicate. Habit status rendering receives the user's already-resolved local date so it does not switch state at UTC midnight.
+- New cross-widget integration tests use real application services and Dexie: dashboard customization/reopen with captured task, note and event data; goal links, knowledge review and People history; Focus, Inbox undo, Weather consent and Finance persistence. They use deterministic local fixtures and no provider credential or network request.
+
+## Data integrity and privacy review
+
+- Finance, AI Inbox, People, Goals, reviews, Focus and Weather records are profile-scoped where their domain requires it. Finance deletion/export is constrained to the selected profile.
+- Weather makes no provider request before explicit network consent. Device location and network consent are separate, cache/credential revocation clears local forecast material, and tests use a local provider double.
+- Finance stays manual and local; it has no bank or brokerage connection.
+- AI Inbox applies local classification and creates destinations through local services. It does not transmit captured text.
+- Reminder completion is idempotent and stores a habit check-in for the occurrence's local date. Existing event/task/follow-up reminder records are retained by additive migrations.
+- No additional extension permissions were introduced in this review.
 
 ## Widget acceptance matrix
 
-All entries below use synthetic fixtures only. A build, unit test or IndexedDB
-test does not count as browser acceptance.
+Automated status below means deterministic unit/integration validation. It is not browser or native-notification evidence.
 
-| Widget / shared flow                                                    | Implementation & automated data tests | Firefox browser                                                     | Chromium browser                                                   |
-| ----------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Dashboard foundation: opt-in, singleton, reorder/resize and persistence | PASS                                  | BLOCKED                                                             | BLOCKED                                                            |
-| Daily Briefing                                                          | PASS                                  | BLOCKED                                                             | BLOCKED                                                            |
-| Quick Capture                                                           | PASS                                  | BLOCKED                                                             | BLOCKED                                                            |
-| Habit Tracker and reminder lifecycle                                    | PASS                                  | BLOCKED for current candidate; re-run the official Firefox workflow | BLOCKED for current candidate; re-run the secure Chromium workflow |
-| Goals & Progress                                                        | PASS                                  | BLOCKED                                                             | BLOCKED                                                            |
-| Knowledge Review                                                        | PASS                                  | BLOCKED                                                             | BLOCKED                                                            |
-| People & Follow-ups                                                     | PASS                                  | BLOCKED                                                             | BLOCKED                                                            |
-| Focus Coach                                                             | PASS                                  | BLOCKED                                                             | BLOCKED                                                            |
-| AI Inbox                                                                | PASS                                  | BLOCKED                                                             | BLOCKED                                                            |
-| Weather & Commute                                                       | PASS                                  | BLOCKED                                                             | BLOCKED                                                            |
-| Finance Snapshot                                                        | PASS                                  | BLOCKED                                                             | BLOCKED                                                            |
+| Widget / flow                                                           | Implementation and automated data validation | Firefox      | Chromium     |
+| ----------------------------------------------------------------------- | -------------------------------------------- | ------------ | ------------ |
+| Dashboard foundation: opt-in, singleton, reorder/resize and persistence | PASS locally                               | BLOCKED | BLOCKED |
+| Daily Briefing and Quick Capture                                        | PASS locally                               | BLOCKED | BLOCKED |
+| Habit Tracker and reminder lifecycle                                    | PASS locally                               | BLOCKED | BLOCKED |
+| Goals & Progress                                                        | PASS locally                               | BLOCKED | BLOCKED |
+| Knowledge Review                                                        | PASS locally                               | BLOCKED | BLOCKED |
+| People & Follow-ups                                                     | PASS locally                               | BLOCKED | BLOCKED |
+| Focus Coach                                                             | PASS locally                               | BLOCKED | BLOCKED |
+| AI Inbox                                                                | PASS locally                               | BLOCKED | BLOCKED |
+| Weather & Commute                                                       | PASS locally                               | BLOCKED | BLOCKED |
+| Finance Snapshot                                                        | PASS locally                               | BLOCKED | BLOCKED |
 
-## Browser-runner requirements
+## Local validation commands
 
-The repository workflow at `.github/workflows/p00.yml` is the acceptance
-entrypoint. It must first build the target extension, load the actual unpacked
-extension into a disposable profile, open the browser's real New Tab URL and
-then inspect persisted extension state after a reload/restart.
-
-- **Firefox:** current official Firefox plus matching geckodriver, a disposable
-  application copy with `distribution/policies.json`, and an Xvfb display. The
-  test must use the real `BrowserCommands.openTab()` New Tab path. It must not
-  treat a direct extension-page navigation as acceptance.
-- **Chromium:** the executable installed for the repository's exact Playwright
-  version, a disposable headed profile under Xvfb, and a verified setuid
-  `chrome_sandbox` helper on a runner where the kernel namespace/seccomp
-  policy permits Chromium's sandbox. The launch configuration requires
-  `chromiumSandbox: true`.
-- Both targets need screenshots, console/page errors, trace/log artifacts and
-  IndexedDB assertions for persisted state. Screenshots and logs are uploaded
-  as `p00-firefox-evidence` and `p00-chrome-evidence` artifacts.
-
-The current browser scripts cover the actual New Tab override and Habit
-Reminder persistence. `habit-reminder-firefox.mjs` selects a Settings control
-only when it is visible, in the viewport and uncovered; the Chromium workflow
-waits for the persisted completed occurrence and one check-in instead of a
-locale-specific `completed` label.
-
-## GitHub Actions admission blocker
-
-The owner supplied evidence that run `39846211068` and preceding Finance runs
-failed before any job step was recorded. That rules out repository test output
-as the cause, but it does not identify a runner-admission cause on its own.
-This workspace cannot inspect its check-run annotations: `gh auth status`
-reports that its injected `GH_TOKEN` is invalid, and unauthenticated Actions
-API access is unavailable here. No workflow YAML change can be justified from
-that missing evidence.
-
-**Required owner action:** in GitHub, open the failed run's job summary and
-copy its runner-admission/usage message (or provide a scoped, read-only Actions
-API credential through the environment, never the repository). Then verify:
-
-1. repository **Settings → Actions → General** permits Actions for the
-   repository;
-2. the owner/organization **Billing and usage → Actions** has an available
-   quota and no disabled payment/usage restriction; and
-3. the selected hosted runner labels (`ubuntu-latest`, `ubuntu-24.04`,
-   `ubuntu-22.04`) are admitted for the repository.
-
-After that, run the workflow manually on the candidate and retain its job URLs
-and artifacts. This separates an account-side admission issue from an
-application failure without weakening the browser or security checks.
-
-## Data safety and privacy review
-
-- Dexie v15 is additive. The v14-to-v15 integration fixture retains profile,
-  widget, note, task, calendar event/rule/occurrence, habit, goals/reviews,
-  people/follow-up/interaction, Focus Coach, Inbox, Weather and commute IDs
-  and revisions before creating and reopening a Finance account.
-- Finance uses integer minor units, keeps currency summaries separate, has no
-  banking/brokerage connection, exports only Finance records for the selected
-  profile and requires a confirmation for finance-only deletion.
-- CSV serializer prefixes spreadsheet-formula sigils after whitespace,
-  control or Unicode-format prefixes. Exported account, category, transaction,
-  bill and bill-payment fields use that serializer.
-- Weather network, location and optional host permission use remain governed
-  by explicit consent. Provider requirements and credential handling are in
-  `docs/product/WEATHER_PROVIDER_AND_PRIVACY_DESIGN.md`.
-
-## Distribution prerequisites
-
-This repository does not sign or submit an extension. Before store/beta
-distribution, complete Firefox signing/identity checks and the relevant store
-metadata, icon, permission and provider-license reviews. The Firefox details
-are tracked in `docs/implementation/P00_FIREFOX_SIGNING_PREREQUISITES.md`.
-
-## Validation
-
-Run these commands in order; build both bundles before the security test:
+Dependencies are already present in Codex Cloud. On a fresh checkout, begin with `npm ci`; do not substitute a package-manager lockfile update. Then run:
 
 ```bash
 npm run lint
@@ -125,14 +78,8 @@ npm run test:security
 git diff --check
 ```
 
-Then execute Firefox New Tab/Habit Reminder acceptance and Chromium New
-Tab/Habit Reminder acceptance on the supported runner. Follow with the
-cross-widget scenarios in the PDR matrix, including English/Persian,
-narrow/desktop, keyboard, reduced-motion, profile isolation and persistence
-after restart.
+Both extension bundles must exist before the security suite. Test counts and command exit codes from the final local run are recorded in the commit report.
 
-## Recommendation
+## Distribution prerequisites
 
-**NO-GO.** The feature implementation and deterministic local data checks are
-ready for review, but GitHub Actions has not admitted the current candidate and
-the required real Firefox/secure-Chromium cross-widget acceptance has not run.
+This repository does not sign or submit an extension. Before beta or store distribution, complete the manual matrix on a supported desktop, Firefox signing/identity checks and the relevant store metadata, icon, permission and provider-license review. Firefox requirements remain in [P00_FIREFOX_SIGNING_PREREQUISITES.md](implementation/P00_FIREFOX_SIGNING_PREREQUISITES.md).

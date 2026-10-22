@@ -103,6 +103,8 @@ describe("P02 productivity domain", () => {
       habitStreak(habit(["2026-03-02", "2026-03-09"], "weekly"), "2026-03-10"),
     ).toBe(2);
     expect(habitState(habit([]), "2999-01-01")).toBe("upcoming");
+    expect(habitState(habit([]), "2026-04-01", "2026-03-31")).toBe("upcoming");
+    expect(habitState(habit([]), "2026-03-30", "2026-03-31")).toBe("missed");
   });
   it("stores pasted markup as text and rejects unsafe links", () => {
     const text = pastedPlainText(

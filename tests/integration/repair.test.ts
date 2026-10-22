@@ -488,6 +488,59 @@ it("replaces edited reminder occurrences and cleans a deleted habit without drop
     ),
   ).toHaveLength(0);
 });
+
+it("cancels now-unscheduled future habit reminders when the frequency changes", async () => {
+  const api = createCalendar({
+    database: calendarDb,
+    alarms: { schedule: async () => {}, clear: async () => {} },
+    notifications: {
+      permission: async () => "missing",
+      show: async () => "rejected",
+      clear: async () => {},
+    },
+    now: () => Date.UTC(2026, 5, 1, 12), // Monday
+  });
+  const habits = createProductivity(
+    productivityDb,
+    undefined,
+    (id, expected, patch) => api.updateHabit(id, expected, patch),
+  );
+  const habit = await habits.createHabit("Plan weekly", "daily");
+  const configured = await api.configureHabitReminder(
+    habit.id,
+    habit.revision,
+    {
+      enabled: true,
+      time: "14:00",
+      timeZone: "UTC",
+      weekdays: [1],
+    },
+  );
+  const dailyRows = (await api.list()).notifications.filter(
+    (row) => row.ownerId === habit.id && row.internalStatus === "pending",
+  );
+  expect(
+    dailyRows.some((row) => row.occurrenceKey.endsWith("2026-06-02")),
+  ).toBe(true);
+
+  await habits.updateHabit(habit.id, configured.revision, {
+    frequency: "weekly",
+  });
+  const rows = (await api.list()).notifications.filter(
+    (row) => row.ownerId === habit.id,
+  );
+  expect(
+    rows.find((row) => row.occurrenceKey.endsWith("2026-06-02")),
+  ).toMatchObject({ internalStatus: "cancelled" });
+  const pending = rows.filter((row) => row.internalStatus === "pending");
+  expect(pending).not.toHaveLength(0);
+  expect(
+    pending.every((row) => {
+      const day = new Date(`${row.occurrenceKey.slice(-10)}T00:00:00Z`);
+      return day.getUTCDay() === 1;
+    }),
+  ).toBe(true);
+});
 const eventDraft = {
   title: "Future",
   basis: "gregorian" as const,

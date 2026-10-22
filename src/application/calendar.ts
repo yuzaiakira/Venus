@@ -377,7 +377,15 @@ export function createCalendar(input: {
           if (!Number.isInteger(day) || day < 1 || day > 7)
             throw new WorkspaceError("invalidInput");
       }
-      if (patch.reminder !== undefined) {
+      // A schedule edit invalidates every unserved occurrence, including a
+      // user-snoozed child attempt. Reconciliation itself must keep snoozes:
+      // they carry attempt > 1 and are still a valid action for their parent
+      // occurrence until an explicit schedule edit supersedes them.
+      const scheduleChanged =
+        patch.reminder !== undefined ||
+        (patch.frequency !== undefined &&
+          patch.frequency !== current.frequency);
+      if (scheduleChanged) {
         await cancelHabitFuture(id);
         for (const rule of await input.database.reminderRules.toArray())
           if (rule.habitId === id)
@@ -392,7 +400,7 @@ export function createCalendar(input: {
         updatedAt: new Date(now()).toISOString(),
       });
       await input.database.habits.put(next);
-      if (patch.reminder !== undefined && reminder?.enabled)
+      if (scheduleChanged && reminder?.enabled)
         await input.database.reminderRules.put(
           reminderRuleSchema.parse({
             id: crypto.randomUUID(),
@@ -460,7 +468,6 @@ export function createCalendar(input: {
     const today = todayInZone(reminder.timeZone, now(), "gregorian");
     const [hour, minute] = reminder.time.split(":").map(Number);
     const desired = new Set<string>();
-    const desiredOccurrences = new Set<string>();
     for (let offset = 0; offset <= materializationHorizonDays; offset += 1) {
       const date = addDays(today, offset);
       if (
@@ -479,7 +486,6 @@ export function createCalendar(input: {
       const fireAt = resolved.instant.epochMs;
       const occurrence = `habit:${habit.id}:${localDate}`;
       for (const rule of rules.slice(0, 1)) {
-        desiredOccurrences.add(`${rule.id}:${occurrence}`);
         const key = idempotencyKey({
           ownerId: habit.id,
           ruleId: rule.id,
@@ -515,8 +521,8 @@ export function createCalendar(input: {
         row.ownerId === habit.id &&
         row.sourceKind === "habit" &&
         ["pending", "due"].includes(row.internalStatus) &&
-        !desired.has(row.idempotencyKey) &&
-        !desiredOccurrences.has(`${row.ruleId}:${row.occurrenceKey}`)
+        row.attempt === 1 &&
+        !desired.has(row.idempotencyKey)
       )
         await input.database.notificationOccurrences.put({
           ...row,
