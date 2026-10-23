@@ -53,8 +53,15 @@ test("manual test kit inventories real-style MV3 bundles and records results", (
     const inventory = JSON.parse(
       readFileSync(join(kit, "manifest-inventory.json"), "utf8"),
     );
+    const initialResults = JSON.parse(
+      readFileSync(join(kit, "acceptance-results.json"), "utf8"),
+    );
     assert.equal(inventory.candidate.commit, "test-candidate");
     assert.match(inventory.candidate.sourceState, /^(?:clean|dirty|unknown)$/);
+    const caseIds = initialResults.results.firefox.map((result) => result.id);
+    assert.equal(initialResults.results.firefox.length, 24);
+    for (const id of ["XW-01", "XW-02", "WGT-BRI-01", "WGT-FIN-01"])
+      assert.ok(caseIds.includes(id));
     assert.equal(inventory.manifest.firefox.manifest_version, 3);
     assert.equal(
       inventory.manifest.chrome.chrome_url_overrides.newtab,
@@ -72,6 +79,39 @@ test("manual test kit inventories real-style MV3 bundles and records results", (
       cwd: kit,
       stdio: "pipe",
     });
+    const archive = join(root, "venus-manual-test-kit.zip");
+    const extracted = join(root, "extracted");
+    execFileSync(
+      process.execPath,
+      ["scripts/package-manual-test-kit.mjs", "--input", kit, "--out", archive],
+      { stdio: "pipe" },
+    );
+    execFileSync(
+      "python3",
+      [
+        "-c",
+        "import pathlib, sys, zipfile; zipfile.ZipFile(sys.argv[1]).extractall(pathlib.Path(sys.argv[2]))",
+        archive,
+        extracted,
+      ],
+      { stdio: "pipe" },
+    );
+    execFileSync(
+      process.execPath,
+      ["scripts/verify-manual-test-kit-hashes.mjs", extracted],
+      { stdio: "pipe" },
+    );
+    for (const path of [
+      "README.md",
+      "ACCEPTANCE_GUIDE.md",
+      "acceptance-results.json",
+      "record-result.mjs",
+      "verify-hashes.mjs",
+      "manifest-inventory.json",
+      "extensions/firefox-mv3/manifest.json",
+      "extensions/chrome-mv3/manifest.json",
+    ])
+      assert.equal(existsSync(join(extracted, path)), true, path);
     execFileSync(
       process.execPath,
       [

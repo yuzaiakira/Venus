@@ -25,8 +25,23 @@ const cases = [
   ["RC-08", "Finance month, zero opening balance and export"],
   ["RC-09", "Reload persistence"],
   ["RC-10", "Version, screenshot and report capture"],
+  // Retained for reports created before individual widget evidence was added.
   ["XW-01", "Goals, Knowledge Review and People follow-up"],
   ["XW-02", "Focus, AI Inbox, Weather and Commute"],
+  [
+    "WGT-DBR-01",
+    "Dashboard foundation: profile, widget singleton and layout persistence",
+  ],
+  ["WGT-BRI-01", "Daily Briefing"],
+  ["WGT-CAP-01", "Quick Capture"],
+  ["WGT-HAB-01", "Habit Tracker and reminder lifecycle"],
+  ["WGT-GOL-01", "Goals & Progress"],
+  ["WGT-REV-01", "Knowledge Review"],
+  ["WGT-PPL-01", "People & Follow-ups"],
+  ["WGT-FOC-01", "Focus Coach"],
+  ["WGT-INB-01", "AI Inbox"],
+  ["WGT-WEA-01", "Weather & Commute"],
+  ["WGT-FIN-01", "Finance Snapshot"],
   ["NOT-OS-01", "Operating-system notification display observation"],
 ];
 const prohibitedSegment = /^(?:\.git|node_modules|\.cache|cache|profiles?)$/i;
@@ -169,8 +184,12 @@ function acceptanceGuide() {
     .slice(0, 10)
     .map(([id, title], index) => `${index + 1}. **${id} — ${title}.**`)
     .join("\n");
-  const remaining = cases
-    .slice(10)
+  const legacy = cases
+    .slice(10, 12)
+    .map(([id, title]) => `- **${id} — ${title}.**`)
+    .join("\n");
+  const widgets = cases
+    .slice(12, -1)
     .map(([id, title]) => `- **${id} — ${title}.**`)
     .join("\n");
   return `# Venus manual acceptance guide
@@ -187,11 +206,17 @@ For **RC-08**, use only synthetic finance values. Verify a zero opening balance,
 
 For **RC-10**, record browser/OS versions, extension ID, manifest version, viewport, locale, timezone, screenshot and sanitized console result in the evidence path named in the result command.
 
-## Remaining cross-widget cases
+## Individual PDR widget evidence
 
-${remaining}
+${widgets}
 
-For \`XW-01\`, verify a goal linked to task/habit data, a knowledge-review rating/postpone flow, and people follow-up snooze/completion without deleting the person. For \`XW-02\`, verify Focus conflict guidance, local AI Inbox classification/undo, and Weather/Commute consent and persistence. For \`NOT-OS-01\`, visually observe the target operating system notification if possible; otherwise record \`NOT_EXECUTED\` or a precise \`BLOCKED\` reason.
+Record a separate result for every item above in each browser. A pass for a grouped release-candidate step is not evidence that each widget passed.
+
+## Retained cross-widget summary and native notification observation
+
+${legacy}
+
+The two retained \`XW\` cases keep older result files readable. They are optional summaries and do not replace the individual widget cases. For \`NOT-OS-01\`, visually observe the target operating system notification if possible; otherwise record \`NOT_EXECUTED\` or a precise \`BLOCKED\` reason.
 
 No case is accepted in Firefox because it passed in Chrome, or because a unit/integration test passed. Do not open an extension page directly as proof of the browser New Tab override.
 `;

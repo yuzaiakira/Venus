@@ -18,9 +18,10 @@ npm run build:chrome
 npm run inspect:manifests
 npm run test:security
 npm run prepare:manual-test-kit
+npm run package:manual-test-kit
 ```
 
-The command creates the ignored directory `artifacts/venus-manual-test-kit/`. It contains copies of the real Firefox and Chrome MV3 build directories, both generated manifests, a complete file/hash inventory, installation instructions, a blank per-browser result file, and an offline Node result recorder. Its inventory records the source commit and whether the source tree was clean or dirty when the artifacts were created. It creates no archive, browser profile, credential, cache, network request, signing request, or store submission.
+The commands create the ignored directory `artifacts/venus-manual-test-kit/` and portable `artifacts/venus-manual-test-kit.zip`. The kit contains copies of the real Firefox and Chrome MV3 build directories, both generated manifests, a complete file/hash inventory, installation instructions, a blank per-browser result file, and offline Node record/verify tools. Its inventory records the source commit and whether the source tree was clean or dirty when the artifacts were created. It creates no browser profile, credential, cache, network request, signing request, or store submission.
 
 The kit refuses symlinks and profile-, cache-, credential-, key-, environment- and dependency-like paths in either copied build. It does not read, copy, create, modify, or delete a user browser profile. Use a newly-created disposable browser profile with no sync, personal data, finance records, API credentials, or competing New Tab override.
 
@@ -59,10 +60,28 @@ Run and record every case independently for Firefox and Chrome.
 9. **RC-09 — Reload persistence.** Reload the extension/browser New Tab and verify the selected profile, widget layout, created records, habit history/reminder settings and finance data persist.
 10. **RC-10 — Version, screenshot and report capture.** Save the manifest/version, viewport, locale, timezone, sanitized screenshot and console result to the evidence directory, then record the final result.
 
-## Remaining cross-widget cases
+## Individual PDR widget evidence
 
-- **XW-01 — Goals, Knowledge Review and People follow-up.** Create a goal linked to task/habit data, rate/postpone a note review, and snooze/complete a follow-up while retaining the person and history.
-- **XW-02 — Focus, AI Inbox, Weather and Commute.** Verify Focus conflict guidance, local Inbox classification/undo, and consent-gated Weather/Commute data without real personal inputs.
+Record each of these cases separately for Firefox and Chrome. A passing grouped RC step is not evidence that every widget passed.
+
+- **WGT-DBR-01 — Dashboard foundation.** Profile selection, standard-widget singleton behaviour, layout persistence and reload.
+- **WGT-BRI-01 — Daily Briefing.** Synthetic task/note/event inputs update the briefing without partial data.
+- **WGT-CAP-01 — Quick Capture.** Task, note and event capture, validation and persisted results.
+- **WGT-HAB-01 — Habit Tracker.** Daily/weekly scheduling, history, reminder reschedule/snooze/complete and one local-date check-in.
+- **WGT-GOL-01 — Goals & Progress.** Goal links, milestones and review without changing the source task/habit.
+- **WGT-REV-01 — Knowledge Review.** Enrol, rate, postpone and reload a note review.
+- **WGT-PPL-01 — People & Follow-ups.** Person, follow-up and interaction history; snooze/complete without deleting the person.
+- **WGT-FOC-01 — Focus Coach.** Conflict guidance, defer/snooze and one active timer.
+- **WGT-INB-01 — AI Inbox.** Local classification, edit, accept/reject and undo.
+- **WGT-WEA-01 — Weather & Commute.** Consent-gated Weather plus persisted manual Commute data, using synthetic information.
+- **WGT-FIN-01 — Finance Snapshot.** Synthetic selected-month records, zero opening balance and safe export/profile deletion.
+
+## Retained cross-widget summary and native notification observation
+
+`XW-01` and `XW-02` remain in the schema so earlier report files stay readable. They are optional summaries and never replace the individual widget cases above.
+
+- **XW-01 — Goals, Knowledge Review and People follow-up.** Aggregate of the corresponding individual cases.
+- **XW-02 — Focus, AI Inbox, Weather and Commute.** Aggregate of the corresponding individual cases.
 - **NOT-OS-01 — Operating-system notification display observation.** Keep the target desktop visible for a due synthetic reminder. Capture a visible OS notification only if actually observed; otherwise record `NOT_EXECUTED` or the exact `BLOCKED` condition. Do not infer it from Notification Center or the extension API.
 
 A browser is not accepted because the other browser passed. Release readiness remains **NO-GO** until each applicable browser case has a `PASS` or a documented non-product `BLOCKED` result and the separate operating-system notification observation is reviewed.
