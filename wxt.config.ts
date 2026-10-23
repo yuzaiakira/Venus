@@ -36,15 +36,25 @@ export default defineConfig({
   manifest: ({ browser, manifestVersion }) => {
     const channel = channelFor(browser);
     const permanent = channel !== "p00";
+    const channelLabel =
+      channel === "beta"
+        ? "Beta"
+        : channel === "release"
+          ? "Release"
+          : "Development";
+    const description =
+      "Local-first personal workspace with dashboard, tasks, notes, calendar, habits, reminders and optional assistant widgets. Browser acceptance and store release remain pending.";
     return {
       name:
         browser === "firefox" && permanent
-          ? `Venus Workspace — ${channel === "beta" ? "Beta" : "Release"} Technical Preview`
-          : "Venus Workspace — P00",
+          ? `Venus Workspace — ${channelLabel} Development Build`
+          : "Venus Workspace — Development Build",
       description:
         browser === "firefox" && permanent
-          ? "Local-only P00 technical preview: Home/New Tab shell and storage, alarm, permission probes; no full workspace features. Firefox requests Home replacement."
-          : "Local-only feasibility build. Firefox installation requests browser-managed Home replacement.",
+          ? `${description} Firefox requests browser-managed Home replacement.`
+          : browser === "firefox"
+            ? `${description} Firefox requests browser-managed Home replacement.`
+            : description,
       permissions: ["storage", "alarms"],
       optional_permissions: ["bookmarks", "notifications"],
       optional_host_permissions: [

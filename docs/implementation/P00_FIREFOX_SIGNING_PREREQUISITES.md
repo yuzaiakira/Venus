@@ -2,6 +2,12 @@
 
 Status: preparation and recommendation only. No AMO upload/submission, ID change, ADR approval, risk approval, commit, push or P01 authorization. F01 remains **NOT VERIFIED**.
 
+## Current development metadata
+
+The current development builds describe the actual local-first Venus workspace: dashboard, tasks, notes, calendar, habits, reminders and optional assistant widgets. The generated names are `Venus Workspace — Development Build` for P00 and Chrome, `Venus Workspace — Beta Development Build` for Firefox beta, and `Venus Workspace — Release Development Build` for Firefox release. The descriptions state that browser acceptance and store release remain pending.
+
+This metadata clarification does not change the fixed P00 ID, the permanent beta/release UUID, minimum Firefox compatibility, database migration path, update URL policy, signing status, or the beta/release channel separation. The historical signing observations below retain their original scope and dates.
+
 ## Inspected candidate
 
 `.output/firefox-mv3` is an unsigned build directory, version `0.0.1`. No compatible signed XPI is established. Manifest uses fixed ID `p00@Venus.invalid`, provisional desktop minimum `140.0`, `background.scripts`, bundled `newtab.html` for both Home and New Tab, required storage/alarms and optional bookmarks/notifications. WXT configuration matches the ID. IndexedDB is `Venus-p00`, schema version 1. No production code or identifiers were changed during this review.
@@ -28,11 +34,11 @@ If this remains a disposable P00 spike, retaining `p00@Venus.invalid` for a sepa
 
 `./node_modules/.bin/web-ext lint --source-dir .output/firefox-mv3 --output text` exited 0 with **0 errors, 0 notices and 4 warnings**:
 
-| Finding | Disposition |
-|---|---|
-| Android minimum 140 predates Android support for `data_collection_permissions` at 142 | Unresolved. Desktop Firefox is the P00 target; no Android support or minimum change approved. Review submitted platform scope and manifest validation before upload. |
-| 48px icon declaration references a 96px image | Unresolved. An asset/manifest fix requires explicit authorization. |
-| Two unsafe dynamic `innerHTML` assignment findings in the built bundle | Unresolved. Inspect generated locations and trace to source/library usage before proposing a fix or disposition. Do not treat local lint exit 0 as security approval. |
+| Finding                                                                               | Disposition                                                                                                                                                           |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android minimum 140 predates Android support for `data_collection_permissions` at 142 | Unresolved. Desktop Firefox is the P00 target; no Android support or minimum change approved. Review submitted platform scope and manifest validation before upload.  |
+| 48px icon declaration references a 96px image                                         | Unresolved. An asset/manifest fix requires explicit authorization.                                                                                                    |
+| Two unsafe dynamic `innerHTML` assignment findings in the built bundle                | Unresolved. Inspect generated locations and trace to source/library usage before proposing a fix or disposition. Do not treat local lint exit 0 as security approval. |
 
 The validator also printed an update-check configuration-access failure under `/home/akira/.config`; no configuration ownership or permissions were changed. No AMO validation was performed. Remaining prior dependency risk and unsigned ADRs remain open.
 

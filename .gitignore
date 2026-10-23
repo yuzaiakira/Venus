@@ -50,3 +50,6 @@ Thumbs.db
 
 # Phase evidence artifacts (local only — do not publish)
 evidence/
+
+# Locally generated manual browser test kits contain built extension bundles.
+artifacts/

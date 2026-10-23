@@ -35,6 +35,8 @@
     "inspect:channels": "node scripts/inspect-channels.mjs",
     "package:firefox:beta": "VENUS_FIREFOX_CHANNEL=beta node scripts/package-firefox-candidate.mjs",
     "test:packaging": "node --test tests/packaging.test.mjs",
+    "prepare:manual-test-kit": "node scripts/prepare-manual-test-kit.mjs",
+    "test:manual-test-kit": "node --test tests/manual-test-kit.test.mjs",
     "test:smoke:identity": "node scripts/smoke-firefox-identity.mjs",
     "preview:ui": "vite --config preview/vite.config.ts"
   },

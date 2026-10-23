@@ -111,9 +111,9 @@ export function stageDistribution(buildRoot, destination) {
   return destination;
 }
 export function reviewerReadme({ channel, platform, arch, node, npm, python }) {
-  return `# Venus ${channel} technical preview — reviewer build
+  return `# Venus ${channel} development build — reviewer build
 
-Unsigned local candidate, not a complete workspace release. This source archive is for AMO review and for rebuilding the extension. It is not itself the signed add-on.
+Unsigned local development candidate for the full Venus workspace. This source archive is for AMO review and for rebuilding the extension. It is not itself the signed add-on, and browser acceptance and store release remain pending.
 
 Original Venus Workspace code is MIT-licensed. The copyright notice is \`Copyright (c) 2026 Akira Yuzai\`. \`LICENSE\` is that text, including \`SPDX-License-Identifier: MIT\`. React, React DOM, scheduler, Dexie, Zod, jalaali-js, rrule-temporal, temporal-polyfill, temporal-spec, temporal-utils, and @zip.js/zip.js keep their own licenses. temporal-spec is Apache-2.0. @zip.js/zip.js is BSD-3-Clause. \`THIRD_PARTY_NOTICES.md\` and \`licenses/\` contain those texts. The same files are copied into the unsigned extension archive because those libraries are bundled there. Venus copyright is not applied to them.
 
@@ -207,7 +207,7 @@ export function validateCandidate(root, channel) {
   for (const { path } of files)
     assert.match(
       path,
-      /^(manifest\.json|background\.js|(?:newtab|options)\.html|icons\/(?:icon|icon-48)\.png|chunks\/(?:tokens|newtab|options)-[\w-]+\.js|assets\/tokens-[\w-]+\.css)$/,
+      /^(manifest\.json|background\.js|(?:newtab|options)\.html|icons\/(?:icon|icon-48)\.png|chunks\/(?:tokens|browser-workspace|newtab|options)-[\w-]+\.js|assets\/(?:tokens|browser-workspace)-[\w-]+\.css)$/,
       `Unexpected artifact: ${path}`,
     );
   const manifest = JSON.parse(
@@ -222,9 +222,13 @@ export function validateCandidate(root, channel) {
   assert.equal(manifest.browser_specific_settings?.gecko?.id, permanentId);
   assert.equal(
     manifest.name,
-    `Venus Workspace — ${channel === "beta" ? "Beta" : "Release"} Technical Preview`,
+    `Venus Workspace — ${channel === "beta" ? "Beta" : "Release"} Development Build`,
   );
-  assert.match(manifest.description, /no full workspace features/);
+  assert.match(manifest.description, /Local-first personal workspace/);
+  assert.match(
+    manifest.description,
+    /Browser acceptance and store release remain pending/,
+  );
   assert.equal(
     manifest.browser_specific_settings.gecko.strict_min_version,
     "140.0",

@@ -1,67 +1,68 @@
-# Venus manual browser acceptance checklist
+# Venus manual browser acceptance
 
-This checklist verifies an unpacked Venus extension without GitHub Actions or a public store release. It complements local unit and IndexedDB integration tests; it does not replace them.
+This guide is the release-candidate browser checklist for the real unpacked Firefox and Chrome MV3 builds. It complements local unit and IndexedDB integration tests; it does not replace them. It neither signs an extension nor submits it to a browser store.
 
-## Prerequisites
+## Current status
 
-Use a desktop development machine with an official current Firefox and a current Chromium-based Chrome. Install the repository's locked dependencies and build each target:
+The local release-candidate baseline is `d907ccec3ffb438bd74bbb6c49913f4f4e79c337` until a later validation report says otherwise. Firefox and Chrome browser acceptance are **NOT EXECUTED** in Codex Cloud: official Firefox and the exact Playwright Chromium are unavailable. Operating-system notification display is also **NOT VERIFIED**.
 
-```bash
-npm ci
+Do not use a system-browser substitute, `--no-sandbox`, a direct extension-page URL, or a passing unit test as browser acceptance evidence.
+
+## Create the offline test kit
+
+From a checkout with dependencies already installed, build both actual extension targets, audit their manifests, run the bundle checks, then create the kit:
+
+```sh
 npm run build:firefox
 npm run build:chrome
 npm run inspect:manifests
 npm run test:security
+npm run prepare:manual-test-kit
 ```
 
-For **Firefox**, open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and select `.output/firefox-mv3/manifest.json`. Open a new tab through the browser UI. Use a fresh Firefox profile for the entire pass.
+The command creates the ignored directory `artifacts/venus-manual-test-kit/`. It contains copies of the real Firefox and Chrome MV3 build directories, both generated manifests, a complete file/hash inventory, installation instructions, a blank per-browser result file, and an offline Node result recorder. Its inventory records the source commit and whether the source tree was clean or dirty when the artifacts were created. It creates no archive, browser profile, credential, cache, network request, signing request, or store submission.
 
-For **Chrome/Chromium**, open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, select `.output/chrome-mv3`, and open a new tab through the browser UI. Use a fresh browser profile. Do not use `--no-sandbox`; automation must retain `chromiumSandbox: true`.
+The kit refuses symlinks and profile-, cache-, credential-, key-, environment- and dependency-like paths in either copied build. It does not read, copy, create, modify, or delete a user browser profile. Use a newly-created disposable browser profile with no sync, personal data, finance records, API credentials, or competing New Tab override.
 
-Before beginning, record browser version, OS version, extension ID, manifest version, viewport, locale and timezone. Keep DevTools console output and save screenshots under a date-stamped evidence directory. For each failed case, capture a screenshot, console errors and persisted IndexedDB state if safely available. Do not include real location, finance, contact or API-key data.
+Before loading an extension, verify the copied build artifacts from the kit directory with `node verify-hashes.mjs`. The command uses Node's standard library and does not need network access.
 
-## Status vocabulary
+## Load the actual extension
 
-- **PASS**: the expected UI and persisted data were observed in the named browser.
-- **FAIL**: the scenario ran and differed from its expected result.
-- **BLOCKED**: an environmental prerequisite prevented execution; record the exact prerequisite.
-- **NOT EXECUTED**: the scenario has not run yet.
+Firefox: in the disposable profile, open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, select `extensions/firefox-mv3/manifest.json` from the generated kit, then open a new tab through the browser UI.
 
-Normal extension notification API acceptance proves only that the browser accepted the request. Record native operating-system notification visibility in the separate final case; never infer it.
+Chrome/Chromium: in the disposable profile, open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, select `extensions/chrome-mv3` from the generated kit, then open a new tab through the browser UI. Automation must keep `chromiumSandbox: true`; do not start Chromium with `--no-sandbox`.
 
-## Shared dashboard cases
+Record the browser and OS versions, extension ID, manifest version, viewport, locale and timezone before the first case. Keep screenshots and console logs under a date-stamped `evidence/` directory inside the kit. Sanitize personal names, locations, finance values, API credentials, extension-storage dumps and browser-profile paths before sharing evidence.
 
-| ID     | Initial state                                   | User action                                            | Expected UI result                                                                | Expected persisted data                  | Browser          | Evidence                                        | Status       |
-| ------ | ----------------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------- | ---------------------------------------- | ---------------- | ----------------------------------------------- | ------------ |
-| DSH-01 | Fresh profile, English LTR desktop              | Open browser New Tab                                   | Venus dashboard, cosmic/glass styling, Dashboard navigation and no console error  | Default profile/layout exist             | Firefox + Chrome | New Tab screenshot, extension ID, console       | NOT EXECUTED |
-| DSH-02 | Existing profile                                | Customize → add each standard widget twice             | First add creates one card; second selects/explains existing card                 | Exactly one instance/type/profile        | Firefox + Chrome | Before/after screenshots, IndexedDB widget rows | NOT EXECUTED |
-| DSH-03 | Three or more cards                             | Drag/drop reorder, resize allowed card, reload New Tab | Grid reflows without overlap; keyboard move/resize remains reachable              | Same placements after reload             | Firefox + Chrome | Desktop + narrow screenshots, stored layout     | NOT EXECUTED |
-| DSH-04 | Persian locale, narrow viewport, reduced motion | Switch language, resize, navigate cards with keyboard  | `dir=rtl`, Persian text/numerals, usable sidebar/dialog focus, no motion-only cue | Locale/motion preference survives reload | Firefox + Chrome | RTL screenshot, focus sequence, preference row  | NOT EXECUTED |
+## Record results without editing a Markdown table
 
-## Widget cases
+Each Firefox and Chrome case starts as `NOT_EXECUTED` in `acceptance-results.json`. From the kit directory, record one case like this:
 
-| ID                            | Initial state                   | User action                                                                                              | Expected UI result                                                                                                                | Expected persisted data                                                    | Browser          | Evidence                                       | Status       |
-| ----------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------- | ---------------------------------------------- | ------------ |
-| BRI-01 Daily Briefing         | Empty dashboard data            | Create Today task, note and future event through Venus                                                   | Briefing updates with task count/next event and focus action                                                                      | Task/note/event remain after reload                                        | Firefox + Chrome | Before/after briefing screenshots              | NOT EXECUTED |
-| CAP-01 Quick Capture          | Capture card added              | Save task, note and event; submit an invalid required field                                              | Clear success feedback; invalid input is actionable                                                                               | One record of each saved kind; no partial invalid record                   | Firefox + Chrome | Cards and IndexedDB rows                       | NOT EXECUTED |
-| HAB-01 Habit lifecycle        | Habit Tracker added             | Create daily and weekly habits, check in, undo, inspect history                                          | Correct state/streak/history; unscheduled/future states are distinct                                                              | Check-ins survive reload; no duplicate date                                | Firefox + Chrome | History screenshots and habits row             | NOT EXECUTED |
-| HAB-02 Habit reminder         | Daily and weekly habits         | Enable, edit and disable local reminder; snooze then complete Notification Center item                   | Saved time/timezone/weekdays; completion updates one check-in and future occurrence remains; disable removes future pending items | Rule/occurrence/check-in changes are idempotent                            | Firefox + Chrome | Notification Center, IndexedDB occurrence rows | NOT EXECUTED |
-| GOL-01 Goals & Progress       | Task and habit exist            | Create goal, link records, complete milestone, create weekly review                                      | Progress and next milestone update without altering source task/habit                                                             | Goal, relation, milestone and review survive reload                        | Firefox + Chrome | Goal screenshots and rows                      | NOT EXECUTED |
-| REV-01 Knowledge Review       | Note exists                     | Enroll note, rate recall, postpone, pause/resume                                                         | Due queue and next date reflect rating; original note remains available                                                           | Schedule/history survive reload                                            | Firefox + Chrome | Review queue/history evidence                  | NOT EXECUTED |
-| PPL-01 People & Follow-ups    | People card added               | Create person, follow-up, interaction; snooze and complete follow-up                                     | Correct due grouping and interaction timeline                                                                                     | Person/follow-up/history survive reload; completion does not delete person | Firefox + Chrome | People page and rows                           | NOT EXECUTED |
-| FOC-01 Focus Coach            | Open task and conflicting event | Inspect explanation, snooze/defer, start timer twice                                                     | Recommendation explains conflict; one existing timer runs; second start is rejected                                               | Deferral and timer survive reload; event unchanged                         | Firefox + Chrome | Focus explanation/timer evidence               | NOT EXECUTED |
-| INB-01 AI Inbox               | Quick Capture available         | Submit English and Persian text, edit classification, accept; reject/restore/undo another                | Local reason/confidence visible; destination opens; undo removes only created destination                                         | Inbox record and destination statuses survive reload                       | Firefox + Chrome | Inbox, destination and console/network log     | NOT EXECUTED |
-| WEA-01 Weather & Commute      | No consent or key               | Open Weather, decline/leave consent, then grant with test credential and manual city                     | No network request before consent; clear unavailable state; forecast and refresh timestamp after consent                          | Consent/location/cache are profile scoped; revoke clears credential/cache  | Firefox + Chrome | DevTools network log, consent views, rows      | NOT EXECUTED |
-| WEA-02 Commute                | Saved local event/location      | Save commute travel/preparation estimate and reload                                                      | Leave-by is shown as user estimate; event is unchanged                                                                            | Plan persists; deleting event leaves no false event claim                  | Firefox + Chrome | Event/commute screenshots                      | NOT EXECUTED |
-| FIN-01 Finance Snapshot       | Finance card added              | Create signed/zero account opening, income, expense, transfer, monthly budget, bill payment and reversal | Selected month totals/budget reflect only that period; balances are lifetime values and currencies stay separate                  | Records survive reload; bill payment stays idempotent                      | Firefox + Chrome | Month screenshots and finance rows             | NOT EXECUTED |
-| FIN-02 Finance privacy/export | Two profiles with test records  | Export JSON/CSV, verify spreadsheet-safe fields, delete Finance data for one profile                     | Export contains only selected profile and safe CSV text; confirmation is clear                                                    | Other profile's finance data remains                                       | Firefox + Chrome | Redacted export and before/after rows          | NOT EXECUTED |
+```sh
+node record-result.mjs --browser firefox --id RC-02 --status PASS --notes "Venus rendered from a real New Tab" --evidence evidence/firefox/rc-02-new-tab.png
+```
 
-## Notification display observation
+Allowed statuses are `PASS`, `FAIL`, `BLOCKED`, and `NOT_EXECUTED`. The command updates `acceptance-results.json` and regenerates the reviewable `acceptance-summary.md`; do not hand-edit a table. A `BLOCKED` result must name the exact unavailable prerequisite. A notification API result proves only that the browser accepted the request; record visible operating-system delivery only in `NOT-OS-01`.
 
-| ID        | Initial state                              | User action                                              | Expected UI result                                            | Expected persisted data                                                   | Browser                      | Evidence                                                       | Status       |
-| --------- | ------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------- | ------------ |
-| NOT-OS-01 | Permission granted and a due test reminder | Keep desktop visible until browser requests notification | Notification Center has the due item regardless of API result | Occurrence has native API outcome; `osDisplay` remains unobserved by code | Firefox + Chrome + target OS | Screenshot/video of OS notification or explicit “not observed” | NOT EXECUTED |
+## Initial 10-step release-candidate sequence
 
-## Exit evidence
+Run and record every case independently for Firefox and Chrome.
 
-Mark a browser target ready only after every applicable row has a PASS or a documented non-product BLOCKED result. Keep Firefox and Chrome results separate. A feature is not accepted in a browser merely because it passed in the other browser or in an IndexedDB test.
+1. **RC-01 — Fresh disposable profile and extension loaded.** Confirm the extension ID and generated manifest match the kit.
+2. **RC-02 — Actual browser New Tab shows Venus.** Open a genuine new tab; confirm the cosmic/glass dashboard and a clean console. Do not navigate directly to an extension URL.
+3. **RC-03 — Onboarding, navigation and profile selection.** Complete or skip onboarding through visible controls, visit major navigation areas, and create/select a disposable profile.
+4. **RC-04 — English LTR and Persian RTL.** Switch both ways, reload, verify `dir`, translated controls, keyboard focus and a narrow viewport.
+5. **RC-05 — Add, reorder and persist dashboard widgets.** Use Customize, confirm standard-widget singleton behaviour, drag/reorder/resize as available, then reload.
+6. **RC-06 — Quick Capture and Daily Briefing.** Create synthetic task, note and event data. Verify the briefing updates and invalid input gives a usable error without a partial record.
+7. **RC-07 — Habit reminder lifecycle.** Create daily and weekly habits, enable/edit/reschedule their local reminder, snooze in Notification Center, complete once, verify one local-date check-in and a future occurrence, then disable and verify new pending occurrences clear.
+8. **RC-08 — Finance month, zero opening balance and export.** Use only synthetic values. Verify selected-month figures, zero and signed opening balances where offered, safe JSON/CSV export, and profile-scoped deletion.
+9. **RC-09 — Reload persistence.** Reload the extension/browser New Tab and verify the selected profile, widget layout, created records, habit history/reminder settings and finance data persist.
+10. **RC-10 — Version, screenshot and report capture.** Save the manifest/version, viewport, locale, timezone, sanitized screenshot and console result to the evidence directory, then record the final result.
+
+## Remaining cross-widget cases
+
+- **XW-01 — Goals, Knowledge Review and People follow-up.** Create a goal linked to task/habit data, rate/postpone a note review, and snooze/complete a follow-up while retaining the person and history.
+- **XW-02 — Focus, AI Inbox, Weather and Commute.** Verify Focus conflict guidance, local Inbox classification/undo, and consent-gated Weather/Commute data without real personal inputs.
+- **NOT-OS-01 — Operating-system notification display observation.** Keep the target desktop visible for a due synthetic reminder. Capture a visible OS notification only if actually observed; otherwise record `NOT_EXECUTED` or the exact `BLOCKED` condition. Do not infer it from Notification Center or the extension API.
+
+A browser is not accepted because the other browser passed. Release readiness remains **NO-GO** until each applicable browser case has a `PASS` or a documented non-product `BLOCKED` result and the separate operating-system notification observation is reviewed.

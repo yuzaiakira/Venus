@@ -10,6 +10,7 @@ export default ts.config(
       "node_modules/**",
       "contracts/**",
       "evidence/**",
+      "artifacts/**",
     ],
   },
   {
